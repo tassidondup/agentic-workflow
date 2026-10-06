@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { checkStage, promote, stageCheck, stagedFiles } from '../src/stage.js';
@@ -104,5 +104,12 @@ describe('staging', () => {
     expect(stageCheck(repo.root, 'c1')).toEqual([]);
     repo.write(`${C}/tests/stage/tests/acceptance/a.test.ts`, 'loosened');
     expect(stageCheck(repo.root, 'c1')).toEqual(['tests gate is changed', 'tests: tests/acceptance/a.test.ts is different from approved staging']);
+  });
+
+  it('keeps the executable bit of a staged file it creates', () => {
+    repo = makeRepo({ [`${C}/design/stage/scripts/run.sh`]: '#!/bin/sh\n' });
+    chmodSync(join(repo.root, C, 'design', 'stage', 'scripts', 'run.sh'), 0o755);
+    promote(repo.root, 'c1', 'design');
+    expect(statSync(join(repo.root, 'scripts', 'run.sh')).mode & 0o111).not.toBe(0);
   });
 });

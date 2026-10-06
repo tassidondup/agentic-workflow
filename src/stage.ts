@@ -53,7 +53,10 @@ export function checkStage(root: string, id: string, gate: StageGate): StageMism
 export function promote(root: string, id: string, gate: StageGate): string[] {
   const files = stagedFiles(root, id, gate);
   files.forEach((f) => assertWritableLive(root, f.livePath));
-  files.forEach((f) => writeRepoFile(root, f.livePath, readRepoFile(root, f.stagePath)));
+  files.forEach((f) => {
+    const mode = (lstatInRepo(root, f.stagePath)?.mode ?? 0o644) & 0o777;
+    writeRepoFile(root, f.livePath, readRepoFile(root, f.stagePath), mode);
+  });
   return files.map((f) => f.livePath);
 }
 

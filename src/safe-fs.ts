@@ -66,12 +66,13 @@ function ensureFolder(root: string, repoDir: string): void {
   }
 }
 
-export function writeRepoFile(root: string, repoPath: string, data: string | Uint8Array): void {
+/** Writes a regular file, creating parent folders; `mode` applies when the file is created. */
+export function writeRepoFile(root: string, repoPath: string, data: string | Uint8Array, mode = 0o644): void {
   const parts = assertSafeRepoPath(repoPath).split('/');
   if (parts.length > 1) ensureFolder(root, parts.slice(0, -1).join('/'));
   const stat = lstatInRepo(root, repoPath);
   if (stat !== null && !stat.isFile()) throw notRegular(repoPath);
-  const fd = openSync(resolveInRepo(root, repoPath), constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | NOFOLLOW, 0o644);
+  const fd = openSync(resolveInRepo(root, repoPath), constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | NOFOLLOW, mode);
   try {
     writeFileSync(fd, data);
   } finally {
