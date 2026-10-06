@@ -73,6 +73,7 @@ function dispatch(cmd: string | undefined, pos: readonly string[], root: string,
   if (max !== undefined && pos.length > max) {
     throw new UsageError(`${cmd} takes at most ${max} argument${max === 1 ? '' : 's'}`);
   }
+  if (report !== undefined && cmd !== 'trace-check') throw new UsageError('--report is only for trace-check');
   switch (cmd) {
     case 'approve': {
       const { path } = approve(root, needId(pos[0]), asGate(pos[1]));

@@ -60,6 +60,13 @@ describe('wf cli', () => {
     expect(cli('memory-check', 'extra').code).toBe(2);
   });
 
+  it('rejects --report on commands other than trace-check', () => {
+    repo = makeRepo();
+    const g = cli('gate-check', 'c1', '--report', 'r.xml');
+    expect(g.code).toBe(2);
+    expect(g.err).toMatch(/--report is only for trace-check/);
+  });
+
   it('runs spec-lint and memory-check', () => {
     repo = makeRepo({ [`${C}/spec-delta.md`]: '| ID | x | Expected |\n|---|---|---|\n| LST-001 | 1 | 2 |\n| LST-001 | 1 | 2 |' });
     const l = cli('spec-lint', 'c1');
