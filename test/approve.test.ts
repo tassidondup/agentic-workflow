@@ -23,6 +23,12 @@ describe('approve', () => {
     expect(checkGate(repo.root, 'c1', 'spec').status).toBe('valid');
   });
 
+  it('refuses to approve a spec whose change.json is malformed', () => {
+    repo = makeRepo({ ...files, [`${C}/change.json`]: '{oops' });
+    expect(() => approve(repo.root, 'c1', 'spec')).toThrow(/change\.json/);
+    expect(checkGate(repo.root, 'c1', 'spec').status).toBe('missing');
+  });
+
   it('refuses to approve design while spec is missing', () => {
     repo = makeRepo(files);
     expect(() => approve(repo.root, 'c1', 'design')).toThrow(/Cannot approve design: the spec gate is missing/);
