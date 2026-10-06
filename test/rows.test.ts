@@ -37,4 +37,31 @@ describe('parseRows', () => {
   it('ignores a header without a separator row', () => {
     expect(parseRows('| ID | Expected |\n| LST-001 | x |', 'f.md')).toEqual([]);
   });
+  it('ignores tables inside tilde fences and treats ``` inside ~~ as non-closing', () => {
+    const md = [
+      '| ID | Expected |',
+      '|---|---|',
+      '| LST-001 | a |',
+      '',
+      '~~~',
+      '| ID | Other |',
+      '|---|---|',
+      '| LST-002 | b |',
+      '```',
+      '| ID | Still in tilde |',
+      '|---|---|',
+      '| LST-003 | c |',
+      '~~~',
+      '',
+      '| ID | Expected |',
+      '|---|---|',
+      '| LST-004 | d |',
+    ].join('\n');
+    const rows = parseRows(md, 'f.md');
+    expect(rows.map((r) => r.id)).toEqual(['LST-001', 'LST-004']);
+  });
+  it('accepts separators with 1-2 dashes', () => {
+    expect(parseRows('| ID | Expected |\n|-|-|\n| LST-001 | x |', 'f.md').map((r) => r.id)).toEqual(['LST-001']);
+    expect(parseRows('| ID | Expected |\n|:-|--:|\n| LST-002 | y |', 'f.md').map((r) => r.id)).toEqual(['LST-002']);
+  });
 });
