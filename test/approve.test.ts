@@ -83,6 +83,15 @@ describe('approve tests validates baseline.json (I7)', () => {
     expect(checkGate(repo.root, 'c1', 'tests').status).toBe('missing');
   });
 
+  it('refuses a baseline taken before the test configuration changed', () => {
+    const config = (command: string[]): string =>
+      JSON.stringify({ approvers: ['tassi'], test: { command, junitReport: 'reports/junit.xml' } });
+    ready({ 'workflow.config.json': config(['npx', 'vitest', 'run']) });
+    writeBaseline();
+    repo.write('workflow.config.json', config(['npx', 'vitest', 'run', 'tests/unit']));
+    expect(() => approve(repo.root, 'c1', 'tests')).toThrow(stale);
+  });
+
   it('refuses a single row key that fuses two row IDs', () => {
     const delta = '| ID | x | Expected |\n|---|---|---|\n| LST-001 | 1 | 2 |\n| LST-002 | 3 | 4 |\n';
     ready({ [`${C}/spec-delta.md`]: delta });

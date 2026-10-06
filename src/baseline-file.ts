@@ -1,14 +1,21 @@
 import { behaviourProblems } from './baseline.js';
 import { readChange, readJsonFile, readRetires } from './change.js';
+import { CONFIG_FILE, loadConfig } from './config.js';
 import { isObject } from './guards.js';
 import { canonicalJson, sha256 } from './hash.js';
 import { changeRepoDir } from './paths.js';
 import { hashRepoFile, listRepoFiles, lstatInRepo } from './safe-fs.js';
 import { changeRowIds } from './spec-index.js';
 
+// The parsed `test` block of workflow.config.json (null when there is no config), so changing the
+// setup, command or report path after a baseline invalidates it; editing approvers does not.
+const testConfig = (root: string): unknown =>
+  lstatInRepo(root, CONFIG_FILE) === null ? null : loadConfig(root).test;
+
 /**
  * sha256 binding a baseline to what it measured: spec-delta.md, every file under tests/,
- * and retires.json (null when absent). Used by run-baseline (on HEAD) and approve (on the tree).
+ * retires.json (null when absent) and the test configuration. Used by run-baseline (on HEAD)
+ * and approve (on the tree).
  */
 export function baselineInputs(root: string, id: string): string {
   const dir = changeRepoDir(id);
@@ -17,6 +24,7 @@ export function baselineInputs(root: string, id: string): string {
     spec_delta: hashRepoFile(root, `${dir}/spec-delta.md`),
     tests: listRepoFiles(root, `${dir}/tests`).map((path) => ({ path, sha256: hashRepoFile(root, path) })),
     retires: lstatInRepo(root, retires) === null ? null : hashRepoFile(root, retires),
+    test_config: testConfig(root),
   }));
 }
 

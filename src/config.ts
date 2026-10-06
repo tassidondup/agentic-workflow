@@ -45,5 +45,7 @@ export function parseConfig(raw: unknown): WorkflowConfig {
   });
 }
 
+export const CONFIG_FILE = 'workflow.config.json';
+
 export const loadConfig = (root: string): WorkflowConfig =>
-  parseConfig(readJsonFile(root, 'workflow.config.json'));
+  parseConfig(readJsonFile(root, CONFIG_FILE));
