@@ -36,7 +36,7 @@ export function toRepoPath(root: string, absPath: string): string {
 export const changeDir = (root: string, id: string): string =>
   join(root, 'docs', 'changes', assertChangeId(id));
 
-function lstatOrNull(path: string): Stats | null {
+export function lstatOrNull(path: string): Stats | null {
   try {
     return lstatSync(path);
   } catch (e) {

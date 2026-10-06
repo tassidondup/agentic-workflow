@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { sha256, sha256File } from '../src/hash.js';
 import { buildRecord, readRecord, recordFileSha, recordPath, writeRecord } from '../src/record.js';
 import { makeRepo, type TestRepo } from './helpers/repo.js';
@@ -52,5 +54,67 @@ describe('approval records', () => {
   ])('rejects a malformed record: %s (Review Focus 2)', (_name, body) => {
     repo = makeRepo({ [`${C}/approvals/spec.json`]: body });
     expect(() => readRecord(repo.root, 'c1', 'spec')).toThrow(/approvals\/spec\.json/);
+  });
+
+  it('refuses to hash a symlinked record file and blocks building downstream records', () => {
+    repo = makeRepo({ ...specFiles, [`${C}/design/design.md`]: 'd' });
+    const tempFile = join(tmpdir(), 'outside-spec.json');
+    writeFileSync(tempFile, '{}');
+    const fs = require('node:fs');
+    try {
+      writeRecord(repo.root, buildRecord(repo.root, 'c1', 'spec'));
+      const recordPath_ = recordPath(repo.root, 'c1', 'spec');
+      fs.unlinkSync(recordPath_);
+      symlinkSync(tempFile, recordPath_);
+      expect(() => recordFileSha(repo.root, 'c1', 'spec')).toThrow(/symlinks are not allowed/);
+      expect(() => buildRecord(repo.root, 'c1', 'design')).toThrow(/symlinks are not allowed/);
+    } finally {
+      try {
+        fs.unlinkSync(tempFile);
+      } catch {
+        // ignore
+      }
+    }
+  });
+
+  it('refuses to write when the record file is a symlink', () => {
+    repo = makeRepo(specFiles);
+    const tempFile = join(tmpdir(), 'outside-spec-write.json');
+    writeFileSync(tempFile, 'original content');
+    const fs = require('node:fs');
+    try {
+      writeRecord(repo.root, buildRecord(repo.root, 'c1', 'spec'));
+      const recordPath_ = recordPath(repo.root, 'c1', 'spec');
+      fs.unlinkSync(recordPath_);
+      symlinkSync(tempFile, recordPath_);
+      const record = buildRecord(repo.root, 'c1', 'spec');
+      expect(() => writeRecord(repo.root, record)).toThrow(/Symlinks are not allowed/);
+      expect(readFileSync(tempFile, 'utf-8')).toBe('original content');
+    } finally {
+      try {
+        fs.unlinkSync(tempFile);
+      } catch {
+        // ignore
+      }
+    }
+  });
+
+  it('refuses to write when the approvals directory is a symlink', () => {
+    repo = makeRepo(specFiles);
+    const tempDir = join(tmpdir(), 'outside-approvals-dir');
+    const fs = require('node:fs');
+    fs.mkdirSync(tempDir, { recursive: true });
+    try {
+      writeRecord(repo.root, buildRecord(repo.root, 'c1', 'spec'));
+      const recordPath_ = recordPath(repo.root, 'c1', 'spec');
+      const approvalsDir = join(recordPath_, '..');
+      fs.rmSync(approvalsDir, { recursive: true });
+      symlinkSync(tempDir, approvalsDir);
+      const record = buildRecord(repo.root, 'c1', 'spec');
+      expect(() => writeRecord(repo.root, record)).toThrow(/Symlinks are not allowed/);
+      expect(fs.readdirSync(tempDir).length).toBe(0);
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });

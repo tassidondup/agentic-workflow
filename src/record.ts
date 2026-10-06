@@ -4,7 +4,7 @@ import { readJsonFile } from './change.js';
 import { coveredFiles } from './coverage.js';
 import { isObject } from './guards.js';
 import { canonicalJson, sha256File } from './hash.js';
-import { assertSafeRepoPath, changeDir, fromRepoPath } from './paths.js';
+import { assertSafeRepoPath, changeDir, fromRepoPath, lstatOrNull } from './paths.js';
 import { PREREQS, type ApprovalRecord, type Gate } from './types.js';
 import { TOOL_VERSION } from './version.js';
 
@@ -15,7 +15,10 @@ export const recordPath = (root: string, id: string, gate: Gate): string =>
 
 export function recordFileSha(root: string, id: string, gate: Gate): string | null {
   const path = recordPath(root, id, gate);
-  return existsSync(path) ? sha256File(path) : null;
+  const stat = lstatOrNull(path);
+  if (stat === null) return null;
+  if (stat.isSymbolicLink()) throw new Error(`docs/changes/${id}/approvals/${gate}.json: symlinks are not allowed`);
+  return sha256File(path);
 }
 
 export function parseRecord(raw: unknown, id: string, gate: Gate): ApprovalRecord {
@@ -65,7 +68,16 @@ export function buildRecord(root: string, id: string, gate: Gate): ApprovalRecor
 
 export function writeRecord(root: string, record: ApprovalRecord): string {
   const path = recordPath(root, record.change, record.gate);
-  mkdirSync(dirname(path), { recursive: true });
+  const approvalsDir = dirname(path);
+  const approvalsDirStat = lstatOrNull(approvalsDir);
+  if (approvalsDirStat !== null && approvalsDirStat.isSymbolicLink()) {
+    throw new Error(`Symlinks are not allowed in gated folders: ${approvalsDir}`);
+  }
+  const recordStat = lstatOrNull(path);
+  if (recordStat !== null && recordStat.isSymbolicLink()) {
+    throw new Error(`Symlinks are not allowed in gated folders: ${path}`);
+  }
+  mkdirSync(approvalsDir, { recursive: true });
   writeFileSync(path, canonicalJson(record));
   return path;
 }
