@@ -51,18 +51,26 @@ describe('full change lifecycle', () => {
     expect(wf('approve', 'listing-price-limits', 'tests').code).toBe(0);
     expect(wf('gate-check', 'listing-price-limits').code).toBe(0);
 
+    // Edit the design after approval: design changed, tests blocked; re-approving design makes tests stale.
+    repo.write(`${C}/design/design.md`, 'Validate price in the API and the UI.');
+    expect(wf('gate-check', 'listing-price-limits').out).toMatch(/spec\s+valid[\s\S]*design\s+changed[\s\S]*tests\s+blocked/);
+    expect(wf('approve', 'listing-price-limits', 'design').code).toBe(0);
+    expect(wf('gate-check', 'listing-price-limits').out).toMatch(/design\s+valid[\s\S]*tests\s+stale/);
+    expect(wf('approve', 'listing-price-limits', 'tests').code).toBe(0);
+    expect(wf('gate-check', 'listing-price-limits').code).toBe(0);
+
     // Edit the spec after approval: spec changed, everything downstream blocked.
     repo.write(`${C}/proposal.md`, 'Limit prices (edited).');
     expect(wf('gate-check', 'listing-price-limits').out).toMatch(/spec\s+changed[\s\S]*design\s+blocked[\s\S]*tests\s+blocked/);
-    wf('approve', 'listing-price-limits', 'spec');
-    expect(wf('gate-check', 'listing-price-limits').out).toMatch(/design\s+stale/);
-    wf('approve', 'listing-price-limits', 'design');
-    wf('approve', 'listing-price-limits', 'tests');
+    expect(wf('approve', 'listing-price-limits', 'spec').code).toBe(0);
+    expect(wf('gate-check', 'listing-price-limits').out).toMatch(/design\s+stale[\s\S]*tests\s+blocked/);
+    expect(wf('approve', 'listing-price-limits', 'design').code).toBe(0);
+    expect(wf('approve', 'listing-price-limits', 'tests').code).toBe(0);
     expect(wf('gate-check', 'listing-price-limits').code).toBe(0);
 
     // Implementation: promote staging, add code, run tests, trace.
-    wf('promote', 'listing-price-limits', 'design');
-    wf('promote', 'listing-price-limits', 'tests');
+    expect(wf('promote', 'listing-price-limits', 'design').code).toBe(0);
+    expect(wf('promote', 'listing-price-limits', 'tests').code).toBe(0);
     repo.write('src/impl/LST-002', 'done');
     repo.write('src/impl/LST-003', 'done');
     expect(wf('stage-check', 'listing-price-limits').code).toBe(0);
