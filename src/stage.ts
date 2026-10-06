@@ -14,7 +14,15 @@ export interface StageMismatch {
   readonly reason: 'missing' | 'different';
 }
 
-const FORBIDDEN = ['docs/changes/', '.git/', '.github/', '.workflow/'];
+const FORBIDDEN_TOP = ['.git', '.github', '.workflow'];
+
+// Compared by segment, case-insensitively: case-insensitive filesystems treat `.GIT` as `.git`.
+function isForbiddenTarget(livePath: string): boolean {
+  const [first, second, ...rest] = livePath.toLowerCase().split('/');
+  return FORBIDDEN_TOP.includes(first ?? '') ||
+    (first === 'docs' && second === 'changes') ||
+    [second, ...rest].includes('.git');
+}
 
 const stageRoot = (id: string, gate: StageGate): string => `${changeRepoDir(id)}/${gate}/stage`;
 
@@ -22,7 +30,7 @@ export function stagedFiles(root: string, id: string, gate: StageGate): StagedFi
   const base = stageRoot(id, gate);
   return listRepoFiles(root, base).map((stagePath) => {
     const livePath = stagePath.slice(base.length + 1);
-    if (FORBIDDEN.some((f) => livePath.toLowerCase().startsWith(f))) {
+    if (isForbiddenTarget(livePath)) {
       throw new Error(`Staged file ${stagePath} may not target ${livePath}`);
     }
     return Object.freeze({ stagePath, livePath });

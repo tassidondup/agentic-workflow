@@ -40,9 +40,18 @@ describe('staging', () => {
     '.workflow/version',
     '.GitHub/workflows/ci.yml',
     'DOCS/changes/x.md',
+    '.git',
+    'sub/.git/hooks/post-checkout',
+    '.Workflow/x',
+    'Docs/Changes/x',
   ])('refuses staged files that target %s', (target) => {
     repo = makeRepo({ [`${C}/tests/stage/${target}`]: 'x' });
     expect(() => stagedFiles(repo.root, 'c1', 'tests')).toThrow(/may not target/);
+  });
+
+  it.each(['docs/specs/a.md', 'src/.gitkeep', 'my.git/x', 'docs/changelog.md'])('allows staged files that target %s (I6)', (target) => {
+    repo = makeRepo({ [`${C}/tests/stage/${target}`]: 'x' });
+    expect(stagedFiles(repo.root, 'c1', 'tests').map((f) => f.livePath)).toEqual([target]);
   });
 
   it('refuses a symlink in staging and copies nothing (Review Focus 1)', () => {
