@@ -57,7 +57,22 @@ const showProblems = (io: Io, problems: readonly string[]): number => {
   return problems.length === 0 ? 0 : 1;
 };
 
+const ARITY: Readonly<Record<string, number>> = {
+  approve: 2,
+  'gate-check': 2,
+  promote: 2,
+  'stage-check': 1,
+  baseline: 1,
+  'trace-check': 1,
+  'spec-lint': 1,
+  'memory-check': 0,
+};
+
 function dispatch(cmd: string | undefined, pos: readonly string[], root: string, report: string | undefined, io: Io): number {
+  const max = cmd ? ARITY[cmd] : undefined;
+  if (max !== undefined && pos.length > max) {
+    throw new UsageError(`${cmd} takes at most ${max} argument${max === 1 ? '' : 's'}`);
+  }
   switch (cmd) {
     case 'approve': {
       const { path } = approve(root, needId(pos[0]), asGate(pos[1]));

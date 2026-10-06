@@ -48,6 +48,14 @@ describe('wf cli', () => {
     expect(cli('trace-check', 'c1').err).toMatch(/--report/);
   });
 
+  it('rejects extra positional arguments', () => {
+    repo = makeRepo();
+    const a = cli('approve', 'c1', 'spec', 'design');
+    expect(a.code).toBe(2);
+    expect(a.err).toMatch(/at most 2/);
+    expect(cli('memory-check', 'extra').code).toBe(2);
+  });
+
   it('runs spec-lint and memory-check', () => {
     repo = makeRepo({ [`${C}/spec-delta.md`]: '| ID | x | Expected |\n|---|---|---|\n| LST-001 | 1 | 2 |\n| LST-001 | 1 | 2 |' });
     const l = cli('spec-lint', 'c1');
