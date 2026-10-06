@@ -44,6 +44,12 @@ describe('staging', () => {
     'sub/.git/hooks/post-checkout',
     '.Workflow/x',
     'Docs/Changes/x',
+    '.git./config',
+    '.git /config',
+    'GIT~1/config',
+    '.g‌it/config',
+    'sub/.git../hooks/x',
+    '.github﻿/workflows/ci.yml',
   ])('refuses staged files that target %s', (target) => {
     repo = makeRepo({ [`${C}/tests/stage/${target}`]: 'x' });
     expect(() => stagedFiles(repo.root, 'c1', 'tests')).toThrow(/may not target/);
@@ -120,5 +126,13 @@ describe('staging', () => {
     chmodSync(join(repo.root, C, 'design', 'stage', 'scripts', 'run.sh'), 0o755);
     promote(repo.root, 'c1', 'design');
     expect(statSync(join(repo.root, 'scripts', 'run.sh')).mode & 0o111).not.toBe(0);
+  });
+
+  it('applies the staged mode to a live file that already exists', () => {
+    repo = makeRepo({ [`${C}/design/stage/scripts/run.sh`]: '#!/bin/sh\n', 'scripts/run.sh': 'old' });
+    chmodSync(join(repo.root, 'scripts', 'run.sh'), 0o644);
+    chmodSync(join(repo.root, C, 'design', 'stage', 'scripts', 'run.sh'), 0o755);
+    promote(repo.root, 'c1', 'design');
+    expect(statSync(join(repo.root, 'scripts', 'run.sh')).mode & 0o777).toBe(0o755);
   });
 });

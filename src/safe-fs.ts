@@ -2,7 +2,7 @@
 // listing goes through resolveInRepo, which refuses any symlink on the way from the repo
 // root to the target, and refuses anything that is not a regular file or folder.
 import {
-  closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, unlinkSync, writeFileSync,
+  closeSync, constants, fchmodSync, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, unlinkSync, writeFileSync,
   type Dirent, type Stats,
 } from 'node:fs';
 import { join } from 'node:path';
@@ -10,6 +10,7 @@ import { sha256 } from './hash.js';
 import { assertSafeRepoPath } from './paths.js';
 
 const NOFOLLOW = constants.O_NOFOLLOW ?? 0;
+const NONBLOCK = constants.O_NONBLOCK ?? 0;
 
 function lstatOrNull(abs: string): Stats | null {
   try {
@@ -45,7 +46,9 @@ export function readRepoFile(root: string, repoPath: string, encoding?: 'utf8'):
   const stat = lstatInRepo(root, repoPath);
   if (stat === null) throw Object.assign(new Error(`No such file: ${repoPath}`), { code: 'ENOENT' });
   if (!stat.isFile()) throw notRegular(repoPath);
-  const fd = openSync(resolveInRepo(root, repoPath), constants.O_RDONLY | NOFOLLOW);
+  // O_NONBLOCK: if a FIFO is swapped in after the lstat above, open returns instead of hanging,
+  // and the fstat below refuses it.
+  const fd = openSync(resolveInRepo(root, repoPath), constants.O_RDONLY | NOFOLLOW | NONBLOCK);
   try {
     if (!fstatSync(fd).isFile()) throw notRegular(repoPath);
     return encoding ? readFileSync(fd, encoding) : readFileSync(fd);
@@ -66,15 +69,16 @@ function ensureFolder(root: string, repoDir: string): void {
   }
 }
 
-/** Writes a regular file, creating parent folders; `mode` applies when the file is created. */
-export function writeRepoFile(root: string, repoPath: string, data: string | Uint8Array, mode = 0o644): void {
+/** Writes a regular file, creating parent folders. A given `mode` is applied even if the file existed. */
+export function writeRepoFile(root: string, repoPath: string, data: string | Uint8Array, mode?: number): void {
   const parts = assertSafeRepoPath(repoPath).split('/');
   if (parts.length > 1) ensureFolder(root, parts.slice(0, -1).join('/'));
   const stat = lstatInRepo(root, repoPath);
   if (stat !== null && !stat.isFile()) throw notRegular(repoPath);
-  const fd = openSync(resolveInRepo(root, repoPath), constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | NOFOLLOW, mode);
+  const fd = openSync(resolveInRepo(root, repoPath), constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | NOFOLLOW, mode ?? 0o644);
   try {
     writeFileSync(fd, data);
+    if (mode !== undefined) fchmodSync(fd, mode);
   } finally {
     closeSync(fd);
   }

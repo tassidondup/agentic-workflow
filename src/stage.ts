@@ -16,9 +16,19 @@ export interface StageMismatch {
 
 const FORBIDDEN_TOP = ['.git', '.github', '.workflow'];
 
-// Compared by segment, case-insensitively: case-insensitive filesystems treat `.GIT` as `.git`.
+// Characters HFS+ ignores in names (zero-width joiners, direction marks, BOM), so `.g‌it` is `.git`.
+const HFS_IGNORABLE = /[​-‏‪-‮⁠-⁤⁪-⁯﻿]/g;
+
+// What a filesystem may resolve a segment to: case-folded, HFS+ ignorables removed, and NTFS
+// trailing dots/spaces stripped (`.git.` and `.git ` are `.git`). `git~1` is .git's 8.3 short name.
+function canonicalSegment(segment: string): string {
+  const s = segment.toLowerCase().replace(HFS_IGNORABLE, '').replace(/[. ]+$/, '');
+  return s === 'git~1' ? '.git' : s;
+}
+
+// Compared by canonical segment, so case-insensitive and alias names can't reach a protected folder.
 function isForbiddenTarget(livePath: string): boolean {
-  const [first, second, ...rest] = livePath.toLowerCase().split('/');
+  const [first, second, ...rest] = livePath.split('/').map(canonicalSegment);
   return FORBIDDEN_TOP.includes(first ?? '') ||
     (first === 'docs' && second === 'changes') ||
     [second, ...rest].includes('.git');
