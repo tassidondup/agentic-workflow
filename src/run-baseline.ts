@@ -17,6 +17,18 @@ function runIn(exec: Exec, command: readonly string[], cwd: string): number {
   return exec(cmd, args, cwd).status;
 }
 
+// Removes the worktree and the temp dir. Never throws: a failure here must not replace
+// whatever error or result the main body already produced (controller ruling R12).
+function cleanupWorktree(exec: Exec, root: string, wt: string, tmp: string): void {
+  try {
+    const removed = exec('git', ['worktree', 'remove', '--force', wt], root);
+    if (removed.status !== 0) exec('git', ['worktree', 'prune'], root);
+  } catch {
+    // Swallowed deliberately: cleanup failures must not mask the original error/result.
+  }
+  rmSync(tmp, { recursive: true, force: true });
+}
+
 export function runBaseline(root: string, id: string, exec: Exec = realExec): { baseline: Baseline | null; problems: readonly string[] } {
   const config = loadConfig(root);
   const meta = readChange(root, id);
@@ -26,9 +38,9 @@ export function runBaseline(root: string, id: string, exec: Exec = realExec): { 
   }
   const tmp = realpathSync(mkdtempSync(join(tmpdir(), 'wf-baseline-')));
   const wt = join(tmp, 'wt');
-  const add = exec('git', ['worktree', 'add', '--detach', wt, 'HEAD'], root);
-  if (add.status !== 0) throw new Error(`git worktree add failed: ${add.stderr.trim()}`);
   try {
+    const add = exec('git', ['worktree', 'add', '--detach', wt, 'HEAD'], root);
+    if (add.status !== 0) throw new Error(`git worktree add failed: ${add.stderr.trim()}`);
     promote(wt, id, 'tests');
     if (config.test.setup && runIn(exec, config.test.setup, wt) !== 0) {
       throw new Error(`Setup command failed: ${config.test.setup.join(' ')}`);
@@ -43,8 +55,6 @@ export function runBaseline(root: string, id: string, exec: Exec = realExec): { 
     if (outcome.baseline) writeFileSync(join(changeDir(root, id), 'baseline.json'), canonicalJson(outcome.baseline));
     return outcome;
   } finally {
-    const removed = exec('git', ['worktree', 'remove', '--force', wt], root);
-    if (removed.status !== 0) exec('git', ['worktree', 'prune'], root);
-    rmSync(tmp, { recursive: true, force: true });
+    cleanupWorktree(exec, root, wt, tmp);
   }
 }

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { realExec, type Exec } from '../src/exec.js';
 import { runBaseline } from '../src/run-baseline.js';
@@ -52,5 +53,46 @@ describe('runBaseline', () => {
   it('fails when the setup command fails', () => {
     setup({ setup: ['node', '-e', 'process.exit(3)'] });
     expect(() => runBaseline(repo.root, 'c1')).toThrow(/Setup command failed/);
+  });
+
+  it('removes the temp dir when git worktree add fails (fix round 1, Important)', () => {
+    setup();
+    const before = readdirSync(tmpdir()).filter((f) => f.startsWith('wf-baseline-'));
+    const exec: Exec = (cmd, args, cwd) =>
+      cmd === 'git' && args[0] === 'worktree' && args[1] === 'add'
+        ? { status: 1, stdout: '', stderr: 'boom' }
+        : realExec(cmd, args, cwd);
+    expect(() => runBaseline(repo.root, 'c1', exec)).toThrow(/git worktree add failed/);
+    const after = readdirSync(tmpdir()).filter((f) => f.startsWith('wf-baseline-'));
+    expect(after).toEqual(before);
+  });
+
+  it('falls back to worktree prune when removal fails, but still returns the result (R12)', () => {
+    setup();
+    const calls: string[][] = [];
+    const exec: Exec = (cmd, args, cwd) => {
+      calls.push([cmd, ...args]);
+      if (cmd === 'git' && args[0] === 'worktree' && args[1] === 'remove') {
+        return { status: 1, stdout: '', stderr: 'locked' };
+      }
+      return realExec(cmd, args, cwd);
+    };
+    const r = runBaseline(repo.root, 'c1', exec);
+    expect(r.problems).toEqual([]);
+    expect(calls.some((c) => c[0] === 'git' && c[1] === 'worktree' && c[2] === 'prune')).toBe(true);
+  });
+
+  it('surfaces the original error even if cleanup itself throws (R12)', () => {
+    setup();
+    const exec: Exec = (cmd, args, cwd) => {
+      if (cmd === 'git' && args[0] === 'worktree' && args[1] === 'remove') {
+        throw new Error('cleanup exploded');
+      }
+      if (cmd === 'node') {
+        return realExec('env', ['FAKE_NO_REPORT=1', 'node', ...args], cwd);
+      }
+      return realExec(cmd, args, cwd);
+    };
+    expect(() => runBaseline(repo.root, 'c1', exec)).toThrow(/did not write reports\/junit\.xml/);
   });
 });
