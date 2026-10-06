@@ -1,29 +1,29 @@
-import { coveredFiles } from './coverage.js';
+import { coveredFiles, inGateScope } from './coverage.js';
 import { readRecord, recordFileSha } from './record.js';
-import { hashRepoFile, lstatInRepo } from './safe-fs.js';
+import { hashRepoFile } from './safe-fs.js';
 import { GATES, type ApprovalRecord, type Gate, type GateResult } from './types.js';
 
 const result = (gate: Gate, status: GateResult['status'], problems: readonly string[]): GateResult =>
   Object.freeze({ gate, status, problems: Object.freeze([...new Set(problems)]) });
 
+// Hashes only paths that coveredFiles() returned; a record path outside that set is never read.
 function ownChanges(root: string, id: string, gate: Gate, record: ApprovalRecord): string[] {
-  const fromRecord = record.covered.flatMap((c) => {
-    try {
-      if (lstatInRepo(root, c.path) === null) return [`${c.path} was deleted`];
-      return hashRepoFile(root, c.path) === c.sha256 ? [] : [`${c.path} changed`];
-    } catch (e) {
-      return [(e as Error).message];
-    }
-  });
   let current: string[];
   try {
     current = coveredFiles(root, id, gate);
   } catch (e) {
-    return [...fromRecord, (e as Error).message];
+    return [(e as Error).message];
   }
+  const live = new Set(current);
+  const fromRecord = record.covered.map((c): string | null => {
+    if (!live.has(c.path)) {
+      return inGateScope(id, gate, c.path) ? `${c.path} was deleted` : `${c.path} is not covered by the ${gate} gate`;
+    }
+    return hashRepoFile(root, c.path) === c.sha256 ? null : `${c.path} changed`;
+  });
   const approved = new Set(record.covered.map((c) => c.path));
   const added = current.filter((p) => !approved.has(p)).map((p) => `${p} was added after approval`);
-  return [...fromRecord, ...added];
+  return [...fromRecord.filter((p): p is string => p !== null), ...added];
 }
 
 export function checkGate(root: string, id: string, gate: Gate): GateResult {

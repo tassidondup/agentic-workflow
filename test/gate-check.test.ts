@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
+import { sha256 } from '../src/hash.js';
 import { buildRecord, writeRecord } from '../src/record.js';
 import { checkAll, checkGate } from '../src/gate-check.js';
 import type { Gate } from '../src/types.js';
-import { makeRepo, type TestRepo } from './helpers/repo.js';
+import { makeRepo, mkfifo, type TestRepo } from './helpers/repo.js';
 
 let repo: TestRepo;
 afterEach(() => repo?.cleanup());
@@ -74,5 +75,25 @@ describe('checkGate', () => {
     const r = checkGate(repo.root, 'c1', 'spec');
     expect(r.status).toBe('missing');
     expect(r.problems[0]).toMatch(/approvals\/spec\.json/);
+  });
+
+  it('reports record paths outside the gate without reading them (I2)', () => {
+    repo = makeRepo({ ...files, 'README.md': 'r' });
+    repo.symlink('/dev', 'link');
+    const real = buildRecord(repo.root, 'c1', 'spec');
+    const extra = [{ path: 'README.md', sha256: sha256('r') }, { path: 'link/zero', sha256: sha256('') }];
+    writeRecord(repo.root, { ...real, covered: [...real.covered, ...extra] });
+    const r = checkGate(repo.root, 'c1', 'spec');
+    expect(r.status).toBe('changed');
+    expect(r.problems).toEqual(['README.md is not covered by the spec gate', 'link/zero is not covered by the spec gate']);
+  });
+
+  it('reports a FIFO in a gated folder as a problem, never valid', () => {
+    repo = makeRepo(files);
+    approveRaw('spec'); approveRaw('design');
+    mkfifo(`${repo.root}/${C}/design/pipe`);
+    const r = checkGate(repo.root, 'c1', 'design');
+    expect(r.status).toBe('changed');
+    expect(r.problems).toEqual([`Not a regular file: ${C}/design/pipe`]);
   });
 });

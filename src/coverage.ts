@@ -27,3 +27,10 @@ export function coveredFiles(root: string, id: string, gate: Gate): string[] {
   const inFolders = FOLDERS[gate].flatMap((f) => listRepoFiles(root, `${dir}/${f}`));
   return [...new Set([...named.map((f) => `${dir}/${f}`), ...inFolders])].sort();
 }
+
+/** True if `repoPath` is a file the gate could cover (named file or inside a gated folder). Pure: no disk access. */
+export function inGateScope(id: string, gate: Gate, repoPath: string): boolean {
+  const dir = changeRepoDir(id);
+  return [...REQUIRED[gate], ...OPTIONAL[gate]].some((f) => repoPath === `${dir}/${f}`) ||
+    FOLDERS[gate].some((f) => repoPath.startsWith(`${dir}/${f}/`));
+}
