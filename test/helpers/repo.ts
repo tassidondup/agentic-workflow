@@ -1,11 +1,12 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 export interface TestRepo {
   readonly root: string;
   write(path: string, content: string): void;
+  symlink(target: string, path: string): void;
   cleanup(): void;
 }
 
@@ -16,8 +17,13 @@ export function makeRepo(files: Record<string, string> = {}): TestRepo {
     mkdirSync(dirname(abs), { recursive: true });
     writeFileSync(abs, content);
   };
+  const symlink = (target: string, path: string): void => {
+    const abs = join(root, ...path.split('/'));
+    mkdirSync(dirname(abs), { recursive: true });
+    symlinkSync(target, abs);
+  };
   Object.entries(files).forEach(([p, c]) => write(p, c));
-  return { root, write, cleanup: () => rmSync(root, { recursive: true, force: true }) };
+  return { root, write, symlink, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }
 
 export function git(root: string, ...args: string[]): string {
