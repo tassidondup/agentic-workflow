@@ -5,8 +5,8 @@ A reusable agentic development workflow for TypeScript repos, greenfield and bro
 This repo is the **framework itself**, not an app. Don't bake any app's stack choices into it.
 
 ## Status
-Design phase. No framework code yet.
-- Current design: `docs/specs/2026-09-29-agentic-workflow-design.md` (v2.1). Read it before proposing changes.
+Design phase. Plan 1 (the `wf` core gate engine) is being implemented on branch `feat/wf-core`: `docs/superpowers/plans/2026-10-05-wf-core-gate-engine.md`.
+- Current design: `docs/specs/2026-09-29-agentic-workflow-design.md` (v2.2). Read it before proposing changes.
 - Superseded design: `docs/specs/2026-09-26-agentic-framework-design.md`. Don't use it.
 - Research: `docs/research/`.
 

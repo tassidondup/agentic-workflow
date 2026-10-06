@@ -28,8 +28,8 @@ docs/
   glossary.md                      domain terms, one definition each, banned synonyms on a "Not:" line
   specs/<capability>/spec.md       living spec: rule tables + journeys + UI states, stable row IDs
   changes/<id>-<slug>/             proposal.md, spec-delta.md, tasks.md, decisions-audit.md,
-                                   design/ (design.md, contract diff, migration draft, mockups),
-                                   tests/ (staged acceptance tests + harness overlay, NOT run as live tests),
+                                   design/ (design.md, mockups, adr drafts, stage/ mirroring live paths),
+                                   tests/stage/ (staged acceptance tests + harness, mirroring live paths), retires.json, change.json,
                                    baseline.json, approvals/<gate>.json
   changes/archive/
   decisions/NNNN-<title>.md        ADRs (number assigned at merge)
@@ -87,7 +87,7 @@ The test for going up a level is "would a wrong plan be expensive, hard to undo 
 1 PROPOSE    you: proposal.md + spec-delta.md (rule tables, journeys, UI states)
 2 CLARIFY    orchestrator: gap hunt + spec-lint (conflicting rows, missing failure/authz/limit rows) → your answers
              → SPEC GATE PR (spec-delta + approvals/spec.json) → you approve and merge
-3 DESIGN     db-designer + ui-ux-designer + backend-dev draft into docs/changes/<id>/design/: OpenAPI diff,
+3 DESIGN     db-designer + ui-ux-designer + backend-dev draft into docs/changes/<id>/design/ (staged files under design/stage/ mirror live paths): contract,
              migration draft, mockups, ADRs, task split with owned paths → (P3+: Codex adversarial review)
              → DESIGN GATE PR (design/ + approvals/design.json) → you approve and merge
              (drafts live under docs/changes/, so nothing deployable reaches main before implementation)
@@ -96,7 +96,7 @@ The test for going up a level is "would a wrong plan be expensive, hard to undo 
                passes = already-existing behaviour)
              → TESTS GATE PR (staged tests + baseline + approvals/tests.json) → you review tests AND baseline, merge
              staged tests are not live: nothing about main's test suite changes yet
-5 BUILD      backend-dev ∥ frontend-dev in worktrees, TDD against the staged tests (`wf test-staged <id>`);
+5 BUILD      backend-dev ∥ frontend-dev in worktrees, TDD against the staged tests (`wf promote <id> tests` into their worktree);
              Stop/TaskCompleted hooks run verify --fast
              TaskCreated hook refuses build tasks until `wf gate check <id> tests` passes on main (which implies spec + design)
              stuck 3× → Codex rescue → orchestrator → you
@@ -152,7 +152,7 @@ A gate counts only if **you** approved **these exact bytes**. Both halves are ch
 ## Test staging, baseline and activation
 **Approved tests are locked by hash, not by sitting on main.** Main's live suite only ever holds tests whose code has shipped, so it only ever has passing tests. There are no row states, no expected-fail on main, and no expiry.
 
-**1. Staging.** qa writes the tests (plus any harness changes, as an overlay) under `docs/changes/<id>/tests/`. The runner config only discovers `tests/acceptance/**`, and that config is itself a locked harness file, so staged tests never run as part of main's suite. Builders run them locally with `wf test-staged <id>`.
+**1. Staging.** qa writes the tests (plus any harness changes, as an overlay) under `docs/changes/<id>/tests/`. The runner config only discovers `tests/acceptance/**`, and that config is itself a locked harness file, so staged tests never run as part of main's suite. Builders run them locally after `wf promote <id> tests` in their worktree.
 
 **2. Baseline.** On the tests gate PR, CI runs the staged tests (with the harness overlay) against current main and writes `baseline.json`: `{ rowId: "fails" | "passes" }`. You approve the tests **and** the baseline together, which handles legitimate already-passing rows:
 - `passes`: the behaviour already exists (unchanged rules, unauthenticated → 401, brownfield characterization rows). That's fine and recorded.
@@ -175,6 +175,17 @@ Merging lands the code and its tests together. Main never holds a test without i
 **5. Overlapping changes.** Staged tests don't run on main, so change B making change A's rows pass breaks nothing. A's implementation PR simply finds those rows passing, which is all it needs. If two changes stage edits to the same harness file, the later one's hash no longer matches after the first merges: rebase → new tests gate PR (re-approval). The harness overlap is serialized, not silently merged.
 
 **6. PARTIAL.** If a change ships only some rows, it declares `PARTIAL` in `progress/`, names each unshipped row and its follow-on change, and those rows' staged tests aren't copied live. The tests gate approval for the follow-on change covers them later.
+
+## Implementation conventions (pinned by the wf core plan)
+- **Change folder:** `docs/changes/<id>/`, where `<id>` is kebab-case (`^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$`). There's no separate slug.
+- **`change.json`** (covered by the spec gate): `{ "level": "P0"|"P1"|"P2"|"P3"|"P4", "noBehaviourChange": boolean }`.
+- **Staging mirrors live paths.** `docs/changes/<id>/design/stage/<live path>` and `docs/changes/<id>/tests/stage/<live path>`. For example, `design/stage/packages/contracts/openapi.yaml` stages `packages/contracts/openapi.yaml`. Staging holds whole files, never diffs.
+- **`wf promote <id> <design|tests>`** copies staging into live paths. Builders use it at the start of BUILD; the implementation PR's byte-identity check compares live files with staging.
+- **`retires.json`** (covered by the tests gate): a JSON array of row IDs this change retires. Optional; absent means none.
+- **Rows:** example tables are markdown tables whose first header cell is `ID` and which include an `Expected` column. Row IDs match `^[A-Z][A-Z0-9]{1,9}-\d{1,4}$`. Pipes inside cells aren't supported in v1.
+- **Tests carry row tags:** each acceptance test name contains `[ROW-ID]`. The project's test command must write a JUnit XML report (`workflow.config.json → test.junitReport`).
+- **trace-check scope:** every live row (in `docs/specs/**`) plus every row in the change's delta, minus rows in `retires.json`, must have an executed, passing test.
+- **`workflow.config.json`:** `{ "approvers": ["<github-username>"], "test": { "setup": ["npm","ci"], "command": ["npx","vitest","run","--reporter=junit","--outputFile=reports/junit.xml"], "junitReport": "reports/junit.xml" } }`. `setup` is optional.
 
 ## Tests
 | Layer | Written by | Locked | Runs |
