@@ -114,4 +114,22 @@ describe('runBaseline', () => {
       rmSync(outside, { recursive: true, force: true });
     }
   });
+
+  it('deletes a committed JUnit report before running, so a silent runner fails (I5)', () => {
+    setup();
+    repo.write('reports/junit.xml', '<testsuite name="stale"><testcase classname="c" name="[LST-002] stale pass"/></testsuite>');
+    git(repo.root, 'add', '.');
+    git(repo.root, 'commit', '-q', '-m', 'stale report');
+    const exec: Exec = (cmd, args, cwd) => realExec(cmd === 'node' ? 'env' : cmd, cmd === 'node' ? ['FAKE_NO_REPORT=1', 'node', ...args] : args, cwd);
+    expect(() => runBaseline(repo.root, 'c1', exec)).toThrow(/did not write reports\/junit\.xml/);
+    expect(existsSync(join(repo.root, C, 'baseline.json'))).toBe(false);
+  });
+
+  it('refuses staged tests that target the JUnit report path (I5)', () => {
+    setup();
+    repo.write(`${C}/tests/stage/Reports/JUnit.xml`, '<testsuite name="forged"/>');
+    git(repo.root, 'add', '.');
+    git(repo.root, 'commit', '-q', '-m', 'forge');
+    expect(() => runBaseline(repo.root, 'c1')).toThrow('Staging may not target the JUnit report path');
+  });
 });

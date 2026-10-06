@@ -8,9 +8,9 @@ import { realExec, type Exec } from './exec.js';
 import { canonicalJson } from './hash.js';
 import { parseJUnit } from './junit.js';
 import { changeRepoDir } from './paths.js';
-import { lstatInRepo, readRepoFile, writeRepoFile } from './safe-fs.js';
+import { lstatInRepo, readRepoFile, removeRepoFile, writeRepoFile } from './safe-fs.js';
 import { changeRowIds, liveRowIds } from './spec-index.js';
-import { promote } from './stage.js';
+import { promote, stagedFiles } from './stage.js';
 
 function runIn(exec: Exec, command: readonly string[], cwd: string): number {
   const [cmd, ...args] = command;
@@ -30,6 +30,16 @@ function cleanupWorktree(exec: Exec, root: string, wt: string, tmp: string): voi
   rmSync(tmp, { recursive: true, force: true });
 }
 
+// Promotes the staged tests into the worktree and removes any committed JUnit report, so the
+// baseline can only read a report the test command wrote in this run (I5).
+function stageIntoWorktree(wt: string, id: string, report: string): void {
+  if (stagedFiles(wt, id, 'tests').some((f) => f.livePath.toLowerCase() === report.toLowerCase())) {
+    throw new Error('Staging may not target the JUnit report path');
+  }
+  promote(wt, id, 'tests');
+  removeRepoFile(wt, report);
+}
+
 export function runBaseline(root: string, id: string, exec: Exec = realExec): { baseline: Baseline | null; problems: readonly string[] } {
   const config = loadConfig(root);
   const meta = readChange(root, id);
@@ -42,7 +52,7 @@ export function runBaseline(root: string, id: string, exec: Exec = realExec): { 
   try {
     const add = exec('git', ['worktree', 'add', '--detach', wt, 'HEAD'], root);
     if (add.status !== 0) throw new Error(`git worktree add failed: ${add.stderr.trim()}`);
-    promote(wt, id, 'tests');
+    stageIntoWorktree(wt, id, config.test.junitReport);
     if (config.test.setup && runIn(exec, config.test.setup, wt) !== 0) {
       throw new Error(`Setup command failed: ${config.test.setup.join(' ')}`);
     }
