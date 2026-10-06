@@ -76,17 +76,30 @@ function runTests(exec: Exec, config: WorkflowConfig, wt: string): TestCase[] {
   return parseJUnit(readRepoFile(wt, report, 'utf8'));
 }
 
+const CONFIG = 'workflow.config.json';
+
+// The baseline runs against HEAD, so everything it reads must be committed. Git-ignored files
+// in the change folder are refused too: approve would hash them, but HEAD doesn't have them.
+function assertCommitted(exec: Exec, root: string, dir: string): void {
+  const status = (paths: string[], ignored = false): string[] =>
+    exec('git', ['status', '--porcelain', ...(ignored ? ['--ignored'] : []), '--', ...paths], root).stdout
+      .split('\n').filter((l) => l.trim() !== '');
+  const clean = 'it runs against a clean checkout of HEAD';
+  if (status([dir]).length > 0) throw new Error(`Commit ${dir} before running the baseline: ${clean}`);
+  if (status([CONFIG]).length > 0) throw new Error(`Commit ${CONFIG} before running the baseline: ${clean}`);
+  const ignored = status([dir], true).filter((l) => l.startsWith('!! ')).map((l) => l.slice(3));
+  if (ignored.length > 0) throw new Error(`Remove git-ignored files from ${dir} before running the baseline: ${ignored.join(', ')}`);
+}
+
 export function runBaseline(root: string, id: string, exec: Exec = realExec): { baseline: Baseline | null; problems: readonly string[] } {
-  const config = loadConfig(root);
   const dir = changeRepoDir(id);
-  if (exec('git', ['status', '--porcelain', '--', dir], root).stdout.trim() !== '') {
-    throw new Error(`Commit ${dir} before running the baseline: it runs against a clean checkout of HEAD`);
-  }
+  assertCommitted(exec, root, dir);
   const tmp = realpathSync(mkdtempSync(join(tmpdir(), 'wf-baseline-')));
   const wt = join(tmp, 'wt');
   try {
     const add = exec('git', ['worktree', 'add', '--detach', wt, 'HEAD'], root);
     if (add.status !== 0) throw new Error(`git worktree add failed: ${add.stderr.trim()}`);
+    const config = loadConfig(wt);
     const inputs = readInputs(wt, id);
     stageIntoWorktree(wt, id, config.test.junitReport);
     const outcome = computeBaseline({ ...inputs, cases: runTests(exec, config, wt) });

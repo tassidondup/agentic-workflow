@@ -39,6 +39,21 @@ describe('runBaseline', () => {
     expect(git(repo.root, 'worktree', 'list').trim().split('\n')).toHaveLength(1);
   });
 
+  it('refuses when workflow.config.json has uncommitted changes', () => {
+    setup();
+    repo.write('workflow.config.json', JSON.stringify({ approvers: ['tassi'], test: { command: ['node', '-e', ''], junitReport: 'r.xml' } }));
+    expect(() => runBaseline(repo.root, 'c1')).toThrow(/Commit workflow\.config\.json before running the baseline/);
+  });
+
+  it('refuses when the change folder holds git-ignored files', () => {
+    setup();
+    repo.write('.gitignore', '*.log\n');
+    git(repo.root, 'add', '.gitignore');
+    git(repo.root, 'commit', '-q', '-m', 'ignore logs');
+    repo.write(`${C}/tests/stage/debug.log`, 'x');
+    expect(() => runBaseline(repo.root, 'c1')).toThrow(/git-ignored files.*docs\/changes\/c1\/tests\/stage\/debug\.log/);
+  });
+
   it('refuses when staged tests are not committed', () => {
     setup();
     repo.write(`${C}/tests/stage/tests/acceptance/extra.test.ts`, 'x');
