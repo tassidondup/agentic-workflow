@@ -9,8 +9,8 @@ import { assertChangeId, toRepoPath } from './paths.js';
 import { runBaseline } from './run-baseline.js';
 import { readRepoFile } from './safe-fs.js';
 import { lintChange } from './spec-lint.js';
-import { checkStage, promote } from './stage.js';
-import { requiredRows, traceImplementation } from './trace.js';
+import { promote, stageCheck } from './stage.js';
+import { traceCheck } from './trace.js';
 import { GATES, STAGE_GATES, type Gate, type GateResult, type Issue, type StageGate } from './types.js';
 
 export interface Io {
@@ -86,8 +86,7 @@ function dispatch(cmd: string | undefined, pos: readonly string[], root: string,
       promote(root, needId(pos[0]), asStageGate(pos[1])).forEach((p) => io.out(p));
       return 0;
     case 'stage-check': {
-      const id = needId(pos[0]);
-      return showProblems(io, STAGE_GATES.flatMap((g) => checkStage(root, id, g).map((m) => `${g}: ${m.livePath} is ${m.reason === 'missing' ? 'missing' : 'different from approved staging'}`)));
+      return showProblems(io, stageCheck(root, needId(pos[0])));
     }
     case 'baseline': {
       const r = runBaseline(root, needId(pos[0]), io.exec);
@@ -101,7 +100,7 @@ function dispatch(cmd: string | undefined, pos: readonly string[], root: string,
       if (!report) throw new UsageError('trace-check needs --report <path to JUnit XML>');
       const id = needId(pos[0]);
       const cases = parseJUnit(readRepoFile(root, report, 'utf8'));
-      return showProblems(io, traceImplementation(requiredRows(root, id), cases).problems);
+      return showProblems(io, traceCheck(root, id, cases));
     }
     case 'spec-lint':
       return showIssues(io, lintChange(root, needId(pos[0])));

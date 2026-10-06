@@ -1,6 +1,8 @@
+import { assertChangeExists } from './change.js';
+import { checkGate } from './gate-check.js';
 import { changeRepoDir } from './paths.js';
 import { hashRepoFile, listRepoFiles, lstatInRepo, readRepoFile, writeRepoFile } from './safe-fs.js';
-import type { StageGate } from './types.js';
+import { STAGE_GATES, type StageGate } from './types.js';
 
 export interface StagedFile {
   readonly stagePath: string;
@@ -45,4 +47,16 @@ export function promote(root: string, id: string, gate: StageGate): string[] {
   files.forEach((f) => assertWritableLive(root, f.livePath));
   files.forEach((f) => writeRepoFile(root, f.livePath, readRepoFile(root, f.stagePath)));
   return files.map((f) => f.livePath);
+}
+
+/** stage-check: every gate with staged files must be valid, and live files must equal its staged bytes. */
+export function stageCheck(root: string, id: string): string[] {
+  assertChangeExists(root, id);
+  return STAGE_GATES.flatMap((g) => {
+    if (stagedFiles(root, id, g).length === 0) return [];
+    const gate = checkGate(root, id, g);
+    const invalid = gate.status === 'valid' ? [] : [`${g} gate is ${gate.status}`];
+    const mismatches = checkStage(root, id, g).map((m) => `${g}: ${m.livePath} is ${m.reason === 'missing' ? 'missing' : 'different from approved staging'}`);
+    return [...invalid, ...mismatches];
+  });
 }

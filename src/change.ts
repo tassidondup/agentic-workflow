@@ -47,3 +47,10 @@ export function readRetires(root: string, id: string): ReadonlySet<string> {
   }
   return new Set(raw as string[]);
 }
+
+/** Throws unless docs/changes/<id>/ is a folder holding a spec-delta.md. */
+export function assertChangeExists(root: string, id: string): void {
+  const dir = changeRepoDir(id);
+  if (lstatInRepo(root, dir)?.isDirectory() !== true) throw new Error(`Change ${id} not found`);
+  if (lstatInRepo(root, `${dir}/spec-delta.md`) === null) throw new Error(`${dir}/spec-delta.md is missing`);
+}

@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../src/cli.js';
+import { approveAll, changeFiles } from './helpers/change.js';
 import { makeRepo, type TestRepo } from './helpers/repo.js';
 
 let repo: TestRepo;
@@ -67,23 +68,35 @@ describe('wf cli', () => {
     expect(cli('memory-check').code).toBe(1);
   });
 
-  it('promotes and stage-checks', () => {
-    repo = makeRepo({ [`${C}/tests/stage/tests/acceptance/a.test.ts`]: 't' });
+  it('promotes and stage-checks; stage-check needs the gate approved (I3)', () => {
+    repo = makeRepo(changeFiles());
     expect(cli('stage-check', 'c1').code).toBe(1);
     expect(cli('promote', 'c1', 'tests').out).toMatch(/tests\/acceptance\/a\.test\.ts/);
+    const unapproved = cli('stage-check', 'c1');
+    expect(unapproved.code).toBe(1);
+    expect(unapproved.out).toMatch(/tests gate is missing/);
+    approveAll(repo);
     expect(cli('stage-check', 'c1').code).toBe(0);
+    expect(cli('stage-check', 'c9').code).toBe(2);
   });
 
-  it('trace-checks a JUnit report', () => {
+  it('trace-checks a JUnit report once the tests gate is valid (I3)', () => {
     repo = makeRepo({
-      [`${C}/spec-delta.md`]: '| ID | x | Expected |\n|---|---|---|\n| LST-001 | 1 | 2 |',
+      ...changeFiles(),
       'reports/junit.xml': '<testsuite name="s"><testcase classname="c" name="[LST-001] ok"/></testsuite>',
     });
+    const unapproved = cli('trace-check', 'c1', '--report', 'reports/junit.xml');
+    expect(unapproved.code).toBe(1);
+    expect(unapproved.out).toMatch(/tests gate is missing; retirements and rows are not approved/);
+    approveAll(repo);
     expect(cli('trace-check', 'c1', '--report', 'reports/junit.xml').code).toBe(0);
     repo.write('reports/junit.xml', '<testsuite name="s"><testcase classname="c" name="[LST-001] ok"><failure/></testcase></testsuite>');
     const t = cli('trace-check', 'c1', '--report', 'reports/junit.xml');
     expect(t.code).toBe(1);
     expect(t.out).toMatch(/LST-001: failing/);
+    const missing = cli('trace-check', 'c9', '--report', 'reports/junit.xml');
+    expect(missing.code).toBe(2);
+    expect(missing.err).toMatch(/Change c9 not found/);
   });
 
   it('refuses to approve when docs/changes is a symlink and writes nothing outside (C1/I1)', () => {

@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { checkStage, promote, stagedFiles } from '../src/stage.js';
+import { checkStage, promote, stageCheck, stagedFiles } from '../src/stage.js';
+import { approveAll, changeFiles } from './helpers/change.js';
 import { makeRepo, type TestRepo } from './helpers/repo.js';
 
 let repo: TestRepo;
@@ -77,5 +78,22 @@ describe('staging', () => {
     mkdirSync(join(repo.root, 'tests'), { recursive: true });
     symlinkSync(join(repo.root, C, 'tests', 'stage', 'tests', 'a.test.ts'), join(repo.root, 'tests', 'a.test.ts'));
     expect(() => checkStage(repo.root, 'c1', 'tests')).toThrow(/Symlinks are not allowed: tests/);
+  });
+
+  it('stageCheck throws when the change or its spec-delta.md is missing (I3)', () => {
+    repo = makeRepo();
+    expect(() => stageCheck(repo.root, 'c1')).toThrow('Change c1 not found');
+    repo.write(`${C}/proposal.md`, 'p');
+    expect(() => stageCheck(repo.root, 'c1')).toThrow(/spec-delta\.md is missing/);
+  });
+
+  it('stageCheck requires a valid gate for every gate with staged files (I3)', () => {
+    repo = makeRepo(changeFiles());
+    promote(repo.root, 'c1', 'tests');
+    expect(stageCheck(repo.root, 'c1')).toEqual(['tests gate is missing']);
+    approveAll(repo);
+    expect(stageCheck(repo.root, 'c1')).toEqual([]);
+    repo.write(`${C}/tests/stage/tests/acceptance/a.test.ts`, 'loosened');
+    expect(stageCheck(repo.root, 'c1')).toEqual(['tests gate is changed', 'tests: tests/acceptance/a.test.ts is different from approved staging']);
   });
 });

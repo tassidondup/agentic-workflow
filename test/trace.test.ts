@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { TestCase } from '../src/junit.js';
-import { requiredRows, rowOutcomes, traceImplementation } from '../src/trace.js';
+import { requiredRows, rowOutcomes, traceCheck, traceImplementation } from '../src/trace.js';
+import { approveAll, changeFiles } from './helpers/change.js';
 import { makeRepo, type TestRepo } from './helpers/repo.js';
 
 const tc = (rowIds: string[], status: TestCase['status']): TestCase => ({ name: rowIds.map((r) => `[${r}]`).join(''), classname: 'c', status, rowIds });
@@ -37,5 +38,25 @@ describe('requiredRows', () => {
       'docs/changes/c1/retires.json': '["LST-002"]',
     });
     expect(requiredRows(repo.root, 'c1')).toEqual(['LST-001', 'LST-003']);
+  });
+});
+
+describe('traceCheck (I3)', () => {
+  let repo: TestRepo;
+  afterEach(() => repo?.cleanup());
+  const pass = [tc(['LST-001'], 'passed')];
+  it('throws when the change folder or its spec-delta.md is missing', () => {
+    repo = makeRepo();
+    expect(() => traceCheck(repo.root, 'c1', pass)).toThrow('Change c1 not found');
+    repo.write('docs/changes/c1/proposal.md', 'p');
+    expect(() => traceCheck(repo.root, 'c1', pass)).toThrow(/spec-delta\.md is missing/);
+  });
+  it('fails unless the tests gate is valid', () => {
+    repo = makeRepo(changeFiles());
+    expect(traceCheck(repo.root, 'c1', pass)).toEqual(['tests gate is missing; retirements and rows are not approved']);
+    approveAll(repo);
+    expect(traceCheck(repo.root, 'c1', pass)).toEqual([]);
+    repo.write('docs/changes/c1/retires.json', '["LST-001"]');
+    expect(traceCheck(repo.root, 'c1', [])).toEqual(['tests gate is changed; retirements and rows are not approved']);
   });
 });

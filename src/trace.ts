@@ -1,4 +1,5 @@
-import { readRetires } from './change.js';
+import { assertChangeExists, readRetires } from './change.js';
+import { checkGate } from './gate-check.js';
 import type { TestCase } from './junit.js';
 import { changeRowIds, liveRowIds } from './spec-index.js';
 
@@ -25,4 +26,12 @@ export function traceImplementation(required: readonly string[], cases: readonly
     .filter(([, o]) => o !== 'passes')
     .map(([r, o]) => `${r}: ${o === 'not-run' ? 'no executed test' : 'failing'}`);
   return { ok: problems.length === 0, problems };
+}
+
+/** trace-check: the tests gate must be valid (it binds spec, design and retires.json), then every required row must pass. */
+export function traceCheck(root: string, id: string, cases: readonly TestCase[]): readonly string[] {
+  assertChangeExists(root, id);
+  const tests = checkGate(root, id, 'tests');
+  if (tests.status !== 'valid') return [`tests gate is ${tests.status}; retirements and rows are not approved`];
+  return traceImplementation(requiredRows(root, id), cases).problems;
 }
