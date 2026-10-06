@@ -14,3 +14,5 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run coverage
+      - run: npm run build
+      - run: node dist/bin.js --help
