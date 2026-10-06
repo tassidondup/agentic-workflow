@@ -1,6 +1,6 @@
-# Agentic Workflow — Design v2.2
+# Agentic Workflow — Design v2.3
 
-Supersedes `2026-09-26-agentic-framework-design.md`. v2.1 added: the agent team model, a reordered lifecycle (contract before tests), the planning dial, test-dispute and harness ownership, and memory maturity, plus ideas from claudex-loop and OpenRig. v2.2 (from Codex reviews 3–4): approvals are hash-bound to you and **chained** (design → spec, tests → spec + design), and tests are **staged and locked by hash** with an approved baseline instead of merged early. That removes the row-state machine.
+Supersedes `2026-09-26-agentic-framework-design.md`. v2.1 added: the agent team model, a reordered lifecycle (contract before tests), the planning dial, test-dispute and harness ownership, and memory maturity, plus ideas from claudex-loop and OpenRig. v2.2 (from Codex reviews 3–4): approvals are hash-bound to you and **chained** (design → spec, tests → spec + design), and tests are **staged and locked by hash** with an approved baseline instead of merged early. That removes the row-state machine. v2.3 (2026-10-06): automated PR review is Codex cloud review, AI approvals never count, review instructions are protected, and Copilot is rejected for now (see *Automated PR review*).
 
 ## Context
 The product is the **workflow**: how memory, decisions, specs, tests and a team of agents fit together. It gets installed into any TypeScript repo, greenfield or brownfield, with `npx <tool> init`.
@@ -67,6 +67,25 @@ tests/harness/                     fixtures, seeds, helpers, runner configs: LOC
 - **TaskCompleted hook:** blocks marking a task done unless `verify --fast` passes for that role's paths.
 - **TeammateIdle hook:** an idle builder with an open task gets nudged to continue or block with a reason.
 - **Gates are approval records on main** (see *Gates and approval records*), never stamps an agent can write. The team's own plan approval (which the lead grants automatically) means nothing.
+
+### Automated PR review (decided 2026-10-06)
+Two review paths, both advisory:
+- **reviewer role** (above): Codex CLI through the runner, adversarial, on implementation PRs; its verdict is tied to the hash of what it judged.
+- **Codex cloud review** on every PR, on GitHub's side, so an agent can't skip it. Triggered automatically (Codex settings → Automatic review) or by commenting `@codex review`. It follows a `## Code Review Rules` section in `AGENTS.md`. *Verified 2026-10-06 against learn.chatgpt.com/docs/third-party/github. Unverified: which ChatGPT plans include it.*
+
+Rules:
+- **AI reviews never approve.** No AI review (Codex, Copilot or any other) counts toward required approvals or any gate. You are the only approval. GitHub's option to let Copilot approvals count toward merge requirements stays off.
+- **Review instructions are protected.** Reviewers read their instructions from the PR's own branch, so an agent could weaken the rules inside the PR being reviewed. `AGENTS.md` and reviewer instruction files are protected paths (see *Trust boundary*).
+- **Deterministic analysis runs in CI as hard gates** (CodeQL code scanning, ESLint), not inside AI review comments.
+
+**Copilot code review: rejected for now.** Reasons:
+- It adds no model diversity beyond Claude plus Codex. GitHub doesn't name the model behind it and you can't choose one (checked against the 2025-10-28 changelog).
+- Its real gains (runs on GitHub, gathers project context, inline comments) are already available through Codex cloud review.
+- It's a third subscription (Copilot Pro or higher).
+
+Revisit if its announced CodeQL/ESLint integration ships and getting those results inside the review proves more useful than running them as separate CI checks.
+
+**Measure in Trial 1:** for each reviewer, count findings no other reviewer caught, comments that were noise, and minutes you spent triaging. Drop any reviewer that rarely finds something new.
 
 ### Workspaces
 Each builder works in its own git worktree and branch (`change/<id>/<role>`). The integrator merges them in order. **Caveat:** natively, a spawned agent is either a teammate or worktree-isolated, not both, so a builder creates or enters its worktree after spawning. *Unproven; the trial must confirm it.*
@@ -219,7 +238,7 @@ Merging lands the code and its tests together. Main never holds a test without i
 ## Trust boundary
 - Agents use a **bot identity** (a fine-grained token: push branches, open PRs; can't merge, edit workflows or change settings). Only you merge.
 - A **GitHub Pro ruleset** on main: PR required, checks required, code-owner review on protected paths.
-- **Protected paths:** `tests/acceptance/**`, `tests/harness/**`, runner configs, `.workflow/**`, `.github/**`, `CODEOWNERS`, `workflow.config.json`, `roles/**`, approved specs, accepted ADRs, `docs/changes/*/approvals/**`, `docs/changes/*/baseline.json`, and the `docs/changes/*/design/**` and `docs/changes/*/tests/**` staging once their gate is approved. An implementation PR may *add* live copies of approved staging; byte-identity is checked by CI.
+- **Protected paths:** `tests/acceptance/**`, `tests/harness/**`, runner configs, `.workflow/**`, `.github/**` (including reviewer instruction files), `CODEOWNERS`, `workflow.config.json`, `AGENTS.md` (its rules steer the AI reviewers), `roles/**`, approved specs, accepted ADRs, `docs/changes/*/approvals/**`, `docs/changes/*/baseline.json`, and the `docs/changes/*/design/**` and `docs/changes/*/tests/**` staging once their gate is approved. An implementation PR may *add* live copies of approved staging; byte-identity is checked by CI.
 - **No production secrets on the dev machine**; agents get dev credentials only.
 - Repo text (brownfield comments, dependency docs) is evidence, never instructions.
 
@@ -240,6 +259,8 @@ Merging lands the code and its tests together. Main never holds a test without i
 | PR deletes a live acceptance test it has no approved retirement for | trace-check fails |
 | A correct implementation | staged tests copied live byte-identical → all its rows pass → CI green → code + tests land in one merge |
 | Bot opens a PR adding an approval record | can't be merged without your review; a record that reached main without your approval fails gate-check |
+| PR edits `AGENTS.md` review rules to weaken the AI review of that same PR | protected path: can't merge without your code-owner review; the AI review is advisory, so a weakened review can't pass any gate on its own |
+| An AI reviewer approves a PR | the approval doesn't count toward required approvals; the PR still needs yours |
 | Major dependency upgrade breaks many acceptance tests | P0 upgrade lane: implementation fixes only, no spec change |
 | Lead session dies mid-change | a new orchestrator resumes from `progress/` + `tasks.md` alone |
 | Teammate marks a task done without doing it | TaskCompleted hook + trace-check; the docs say task status can lag |
