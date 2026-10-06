@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { lstatSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { isObject } from './guards.js';
 import { changeDir } from './paths.js';
@@ -14,6 +14,18 @@ export interface ChangeMeta {
 
 export function readJsonFile(absPath: string, label: string): unknown {
   let text: string;
+  try {
+    const stat = lstatSync(absPath);
+    if (stat.isSymbolicLink()) {
+      throw new Error(`${label}: symlinks are not allowed`);
+    }
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException;
+    if (err.code === 'ENOENT') {
+      throw new Error(`${label}: cannot read file (ENOENT: no such file or directory, lstat '${absPath}')`);
+    }
+    throw e;
+  }
   try {
     text = readFileSync(absPath, 'utf8');
   } catch (e) {
@@ -40,7 +52,13 @@ export function readChange(root: string, id: string): ChangeMeta {
 
 export function readRetires(root: string, id: string): ReadonlySet<string> {
   const path = join(changeDir(root, id), 'retires.json');
-  if (!existsSync(path)) return new Set();
+  try {
+    lstatSync(path);
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException;
+    if (err.code === 'ENOENT') return new Set();
+    throw e;
+  }
   const label = `docs/changes/${id}/retires.json`;
   const raw = readJsonFile(path, label);
   if (!Array.isArray(raw) || !raw.every((r) => typeof r === 'string' && ROW_ID.test(r))) {

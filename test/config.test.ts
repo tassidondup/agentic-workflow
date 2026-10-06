@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { symlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { loadConfig, parseConfig } from '../src/config.js';
 import { readChange, readRetires } from '../src/change.js';
 import { makeRepo, type TestRepo } from './helpers/repo.js';
@@ -43,6 +45,13 @@ describe('loadConfig', () => {
     repo = makeRepo();
     expect(() => loadConfig(repo.root)).toThrow(/workflow\.config\.json/);
   });
+  it('rejects a symlinked workflow.config.json', () => {
+    repo = makeRepo();
+    const tmpFile = join(repo.root, 'config-target.json');
+    writeFileSync(tmpFile, '{"approvers":["user"],"test":{"command":["npm"],"junitReport":"reports/junit.xml"}}');
+    symlinkSync(tmpFile, join(repo.root, 'workflow.config.json'));
+    expect(() => loadConfig(repo.root)).toThrow(/workflow\.config\.json: symlinks are not allowed/);
+  });
 });
 
 describe('readChange and readRetires', () => {
@@ -68,5 +77,24 @@ describe('readChange and readRetires', () => {
     expect([...readRetires(repo.root, 'c1')]).toEqual(['LST-001', 'LST-002']);
     repo.write('docs/changes/c1/retires.json', '["lst-1"]');
     expect(() => readRetires(repo.root, 'c1')).toThrow(/retires\.json/);
+  });
+  it('rejects a symlinked change.json', () => {
+    repo = makeRepo({ 'docs/changes/c1/.gitkeep': '' });
+    const tmpFile = join(repo.root, 'change-target.json');
+    writeFileSync(tmpFile, '{"level":"P0","noBehaviourChange":true}');
+    symlinkSync(tmpFile, join(repo.root, 'docs/changes/c1/change.json'));
+    expect(() => readChange(repo.root, 'c1')).toThrow(/change\.json: symlinks are not allowed/);
+  });
+  it('rejects a symlinked retires.json (existing target)', () => {
+    repo = makeRepo({ 'docs/changes/c1/.gitkeep': '' });
+    const tmpFile = join(repo.root, 'retires-target.json');
+    writeFileSync(tmpFile, '["LST-001"]');
+    symlinkSync(tmpFile, join(repo.root, 'docs/changes/c1/retires.json'));
+    expect(() => readRetires(repo.root, 'c1')).toThrow(/retires\.json: symlinks are not allowed/);
+  });
+  it('rejects a symlinked retires.json (dangling symlink)', () => {
+    repo = makeRepo({ 'docs/changes/c1/.gitkeep': '' });
+    symlinkSync('/nonexistent/file.json', join(repo.root, 'docs/changes/c1/retires.json'));
+    expect(() => readRetires(repo.root, 'c1')).toThrow(/retires\.json: symlinks are not allowed/);
   });
 });
