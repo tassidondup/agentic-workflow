@@ -1,0 +1,1113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>Agentic Workflow v2.2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#EEF1F4; --surface:#FFFFFF; --surface-2:#F6F8FA; --ink:#141A21; --muted:#56616E;
+  --line:#D3DAE2; --line-strong:#A9B4C1;
+  --you:#0B7A75; --claude:#B35626; --codex:#4655C9; --enf:#3E4C5C; --file:#5F6A77;
+  --go:#2E8B47; --hold:#A8750A; --stop:#BF3A2F;
+  --you-soft:#DCEFED; --claude-soft:#F5E4D9; --codex-soft:#E2E5FA; --enf-soft:#E2E7ED; --file-soft:#EDF0F3;
+  --go-soft:#DCF0E1; --hold-soft:#F6EACB; --stop-soft:#F7DDDA;
+  --shadow:0 1px 2px rgba(20,26,33,.06),0 4px 14px rgba(20,26,33,.05);
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1319; --surface:#151C24; --surface-2:#1A232D; --ink:#E5EAF0; --muted:#98A4B2;
+    --line:#2A3542; --line-strong:#465566;
+    --you:#3EC4BA; --claude:#E68A55; --codex:#8E9AF3; --enf:#A5B3C3; --file:#A7B1BC;
+    --go:#4FC66F; --hold:#E3AE3A; --stop:#EF6B5E;
+    --you-soft:#12302F; --claude-soft:#38251A; --codex-soft:#1E2347; --enf-soft:#1F2833; --file-soft:#1B232C;
+    --go-soft:#15301E; --hold-soft:#33280D; --stop-soft:#3B1915;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.25);
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1319; --surface:#151C24; --surface-2:#1A232D; --ink:#E5EAF0; --muted:#98A4B2;
+  --line:#2A3542; --line-strong:#465566;
+  --you:#3EC4BA; --claude:#E68A55; --codex:#8E9AF3; --enf:#A5B3C3; --file:#A7B1BC;
+  --go:#4FC66F; --hold:#E3AE3A; --stop:#EF6B5E;
+  --you-soft:#12302F; --claude-soft:#38251A; --codex-soft:#1E2347; --enf-soft:#1F2833; --file-soft:#1B232C;
+  --go-soft:#15301E; --hold-soft:#33280D; --stop-soft:#3B1915;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 14px rgba(0,0,0,.25);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans);padding-inline:16px;padding-block:0 56px;}
+.wrap{max-width:1120px;margin:0 auto}
+a{color:var(--you)}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(34px,6vw,58px);font-stretch:118%;font-weight:780;line-height:1.02}
+h2{font-size:clamp(24px,3.4vw,32px);font-stretch:112%;font-weight:720;line-height:1.1}
+h3{font-size:17px;font-stretch:106%;font-weight:680}
+p{margin:0}
+code,.mono{font-family:var(--mono);font-size:.88em}
+.eyebrow{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--you);outline-offset:2px}
+
+/* top bar */
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);border-bottom:1px solid var(--line);margin-inline:-16px;padding:10px 16px}
+.topbar .wrap{display:flex;gap:16px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.brand{font:700 13px/1 var(--display);font-stretch:118%;letter-spacing:.02em}
+.brand span{color:var(--muted);font-weight:500}
+.nav{display:flex;gap:4px;flex-wrap:wrap}
+.nav a{font:500 12.5px/1 var(--sans);color:var(--muted);text-decoration:none;padding:7px 9px;border-radius:6px}
+.nav a:hover{color:var(--ink);background:var(--surface)}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:40px;padding-block:44px 28px;align-items:end}
+.hero .lede{font-size:18px;line-height:1.5;color:var(--muted);max-width:56ch;margin-top:16px}
+.hero .lede strong{color:var(--ink);font-weight:600}
+.you-do{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px;box-shadow:var(--shadow)}
+.you-do ol{margin:12px 0 0;padding:0;list-style:none;display:grid;gap:10px;counter-reset:d}
+.you-do li{display:grid;grid-template-columns:28px 1fr;gap:10px;align-items:start;counter-increment:d}
+.you-do li::before{content:counter(d);width:24px;height:24px;border-radius:50%;background:var(--you-soft);color:var(--you);font:600 12px/24px var(--mono);text-align:center}
+.you-do .note{margin-top:12px;font-size:13px;color:var(--muted);border-top:1px dashed var(--line);padding-top:10px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:22px}
+.chip{display:inline-flex;align-items:center;gap:7px;font:500 12.5px/1 var(--sans);color:var(--muted)}
+.chip i{width:12px;height:12px;border-radius:3px;border:1.5px solid;display:inline-block}
+.c-you i{background:var(--you-soft);border-color:var(--you)}
+.c-claude i{background:var(--claude-soft);border-color:var(--claude)}
+.c-codex i{background:var(--codex-soft);border-color:var(--codex)}
+.c-enf i{background:var(--enf-soft);border-color:var(--enf)}
+.c-file i{background:var(--file-soft);border-color:var(--file)}
+
+/* sections */
+.sec{padding-block:44px 8px;border-top:1px solid var(--line);margin-top:28px}
+.sec-head{display:grid;gap:10px;margin-bottom:22px;max-width:72ch}
+.sec-head p{color:var(--muted)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow)}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{border:1px solid var(--line-strong);background:var(--surface);border-radius:8px;padding:8px 12px;font:500 13px/1 var(--sans);cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.warn{border-color:var(--stop);color:var(--stop)}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.pill{display:inline-flex;align-items:center;gap:6px;font:600 11.5px/1 var(--mono);padding:5px 8px;border-radius:999px;letter-spacing:.02em;white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.p-go{background:var(--go-soft);color:var(--go)}
+.p-hold{background:var(--hold-soft);color:var(--hold)}
+.p-stop{background:var(--stop-soft);color:var(--stop)}
+.p-idle{background:var(--file-soft);color:var(--muted)}
+
+/* architecture */
+.arch-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;align-items:start}
+.figure{overflow-x:auto;padding:12px}
+#arch{width:100%;min-width:760px;height:auto;display:block}
+#arch .bands rect{fill:var(--surface-2);stroke:var(--line)}
+#arch .band-labels text{font:600 11px var(--mono);letter-spacing:.1em;fill:var(--muted)}
+#arch .edges path{fill:none;stroke:var(--line-strong);stroke-width:1.5}
+#arch .edges .flow{stroke-dasharray:5 5;animation:dash 1.1s linear infinite}
+#arch .edges .peer{stroke:var(--claude);stroke-dasharray:3 4;animation:dash 1.1s linear infinite}
+#arch .edges .bus{stroke:var(--file);stroke-width:2}
+#arch .edges .tick{stroke:var(--file)}
+#arch .elabel{font:500 11px var(--sans);fill:var(--muted)}
+@keyframes dash{to{stroke-dashoffset:-10}}
+.node{cursor:pointer}
+.node rect{stroke-width:1.5;transition:stroke-width .15s}
+.node:focus{outline:none}
+.node:hover rect,.node:focus-visible rect,.node.sel rect{stroke-width:3}
+.node text{pointer-events:none}
+.node .nm{font:600 12.5px var(--sans);fill:var(--ink);text-anchor:middle}
+.node .sb{font:400 10.5px var(--sans);fill:var(--muted);text-anchor:middle}
+.k-you rect{fill:var(--you-soft);stroke:var(--you)}
+.k-claude rect{fill:var(--claude-soft);stroke:var(--claude)}
+.k-codex rect{fill:var(--codex-soft);stroke:var(--codex)}
+.k-enf rect{fill:var(--enf-soft);stroke:var(--enf)}
+.k-file rect{fill:var(--file-soft);stroke:var(--file)}
+.k-file .nm{font-family:var(--mono);font-weight:500;font-size:12px}
+.k-go rect{fill:var(--go-soft);stroke:var(--go)}
+.pulse{stroke:var(--surface);stroke-width:1.5}
+.pz-you{fill:var(--you)} .pz-claude{fill:var(--claude)} .pz-codex{fill:var(--codex)} .pz-enf{fill:var(--enf)} .pz-file{fill:var(--file)} .pz-go{fill:var(--go)}
+.motion-paused #arch .edges path{animation-play-state:paused}
+.node-panel{padding:18px 18px 20px;display:grid;gap:10px;position:sticky;top:72px}
+.node-panel .np-kind{display:flex;gap:6px;flex-wrap:wrap}
+.node-panel .np-body{color:var(--ink)}
+.node-panel ul{margin:0;padding-left:18px;display:grid;gap:4px;color:var(--muted);font-size:14px}
+.node-panel .hint{font-size:12.5px;color:var(--muted);border-top:1px dashed var(--line);padding-top:10px}
+.tag{font:600 11px/1 var(--mono);padding:5px 7px;border-radius:5px;border:1px solid var(--line);color:var(--muted)}
+.tag.you{color:var(--you);border-color:var(--you)} .tag.claude{color:var(--claude);border-color:var(--claude)} .tag.codex{color:var(--codex);border-color:var(--codex)} .tag.enf{color:var(--enf);border-color:var(--enf)} .tag.file{color:var(--file);border-color:var(--file)}
+.arch-foot{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;padding:0 14px 12px;font-size:13px;color:var(--muted)}
+
+/* lifecycle */
+.track-wrap{overflow-x:auto;padding:22px 18px 8px}
+.track-box{position:relative;min-width:860px}
+.track{display:grid;grid-template-columns:repeat(9,minmax(92px,1fr));gap:0;list-style:none;margin:0;padding:0}
+.track-box .rail,.track-box .fill{position:absolute;top:21px;height:3px;border-radius:2px;left:0;width:0}
+.track-box .rail{background:var(--line)}
+.track-box .fill{background:var(--ink);transition:width .6s cubic-bezier(.4,.1,.2,1)}
+.station{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+.station button{width:44px;height:44px;border-radius:50%;border:2px solid var(--line-strong);background:var(--surface);font:600 14px/1 var(--mono);cursor:pointer;transition:transform .3s,background .3s,border-color .3s,color .3s;position:relative;z-index:1}
+.station .lbl{font:600 11.5px/1.2 var(--mono);letter-spacing:.04em;color:var(--muted)}
+.station.done button{border-color:var(--ink);background:var(--ink);color:var(--bg)}
+.station.on button{border-color:var(--ink);background:var(--surface);color:var(--ink);transform:scale(1.14);box-shadow:0 0 0 6px var(--enf-soft)}
+.station.on .lbl{color:var(--ink)}
+.gatebadge{font:600 10px/1 var(--mono);padding:4px 6px;border-radius:4px;background:var(--you-soft);color:var(--you);letter-spacing:.03em}
+.gatebadge.ci{background:var(--enf-soft);color:var(--enf)}
+.stage-card{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border-top:1px solid var(--line);margin-top:14px}
+.stage-card>div{padding:16px 18px;border-right:1px solid var(--line);display:grid;gap:8px;align-content:start}
+.stage-card>div:last-child{border-right:0}
+.stage-card .who{display:flex;flex-wrap:wrap;gap:6px}
+.stage-card ul{margin:0;padding-left:16px;display:grid;gap:4px;font-size:14px}
+.stage-card .k{font:600 10.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.stage-title{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;padding:6px 18px 0}
+.stage-title h3{font-size:20px}
+.fadein{animation:fadein .45s ease}
+@keyframes fadein{from{opacity:.35;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* gates chain */
+.chain{display:grid;grid-template-columns:1fr 54px 1fr 54px 1fr;align-items:stretch;padding:18px}
+.gate{border:1.5px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px;background:var(--surface);transition:border-color .35s,background .35s}
+.gate.st-valid{border-color:var(--go)}
+.gate.st-changed,.gate.st-blocked{border-color:var(--stop);background:var(--stop-soft)}
+.gate.st-stale{border-color:var(--hold);background:var(--hold-soft)}
+.gate .row{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.gate dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:12.5px}
+.gate dt{color:var(--muted)} .gate dd{margin:0;font-family:var(--mono);font-size:12px;overflow-wrap:anywhere}
+.gate .covers{font-size:12.5px;color:var(--muted)}
+.gate .covers code{color:var(--ink)}
+.gate .reapprove{justify-self:start}
+.gate.flash,.link.flash{animation:flash .55s cubic-bezier(.3,.1,.2,1) both}
+@keyframes flash{from{transform:scale(.96);opacity:.55}to{transform:none;opacity:1}}
+.link{display:flex;align-items:center;justify-content:center;position:relative}
+.link svg{width:54px;height:24px;overflow:visible}
+.link path{fill:none;stroke:var(--go);stroke-width:2.5;stroke-dasharray:6 4;animation:dash 1.1s linear infinite;transition:stroke .35s}
+.link.bad path{stroke:var(--stop)} .link.stale path{stroke:var(--hold)}
+.chain-foot{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:16px;padding:0 18px 18px}
+.impl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-weight:600}
+.term{background:var(--surface-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font:12px/1.55 var(--mono);color:var(--muted);height:168px;overflow:auto;margin:0;white-space:pre-wrap}
+.term .ok{color:var(--go)} .term .bad{color:var(--stop)} .term .warn{color:var(--hold)} .term .cmd{color:var(--ink)}
+
+/* tests table */
+.tt-wrap{overflow-x:auto;padding:6px 18px 0}
+table.tt{width:100%;border-collapse:collapse;min-width:720px;font-size:13.5px}
+.tt th{font:600 10.5px/1.2 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:left;padding:10px 8px;border-bottom:1px solid var(--line)}
+.tt td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tt td.rid{font:600 12px var(--mono);color:var(--muted);width:44px}
+.tt td.cell{width:15%}
+.tt tr:last-child td{border-bottom:0}
+.mark{display:inline-flex;align-items:center;gap:6px;font:500 12px/1 var(--mono);padding:4px 7px;border-radius:6px;opacity:1;transform:none;transition:opacity .35s,transform .35s}
+.mark.hide{opacity:0;transform:translateY(4px)}
+.m-lock{background:var(--codex-soft);color:var(--codex)}
+.m-fail{background:var(--stop-soft);color:var(--stop)}
+.m-pass{background:var(--go-soft);color:var(--go)}
+.m-flag{background:var(--hold-soft);color:var(--hold)}
+.m-idle{background:var(--file-soft);color:var(--muted)}
+.kind{font-size:11.5px;color:var(--muted)}
+.tt-foot{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px 18px 18px;border-top:1px solid var(--line);margin-top:8px}
+.tt-status{font-size:14px}
+.tt-status b{font-weight:600}
+.colhead-on{color:var(--ink)!important}
+
+/* comms */
+.comms{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:0}
+.comms .figure{border-right:1px solid var(--line)}
+#comms{width:100%;min-width:520px;height:auto;display:block}
+#comms .cn rect{stroke-width:1.5}
+#comms .cn text{font:600 12px var(--sans);fill:var(--ink);text-anchor:middle}
+#comms .cn text.sb{font:400 10.5px var(--sans);fill:var(--muted)}
+#comms .cn.k-file text.nm{font-family:var(--mono);font-weight:500;font-size:11.5px}
+#comms .cline{stroke:var(--line);stroke-width:1.2;fill:none;stroke-dasharray:3 4}
+#bubble{transition:transform 1s cubic-bezier(.45,.05,.25,1),opacity .3s}
+#bubble rect{fill:var(--ink)} #bubble text{font:500 11px var(--sans);fill:var(--bg);text-anchor:middle}
+.fstate{transition:fill .4s, stroke .4s}
+.steps{list-style:none;margin:0;padding:16px 18px;display:grid;gap:6px;counter-reset:s}
+.steps li{display:grid;grid-template-columns:26px 1fr;gap:8px;padding:8px 10px;border-radius:8px;color:var(--muted);font-size:13.5px;counter-increment:s;transition:background .3s,color .3s}
+.steps li::before{content:counter(s);font:600 12px/22px var(--mono);width:22px;height:22px;border-radius:50%;background:var(--file-soft);text-align:center;color:var(--muted)}
+.steps li.on{background:var(--surface-2);color:var(--ink)}
+.steps li.on::before{background:var(--ink);color:var(--bg)}
+.steps b{color:var(--ink);font-weight:600}
+.comms-foot{padding:0 18px 16px;display:flex;gap:8px;flex-wrap:wrap}
+
+/* dial */
+.dial{padding:18px;display:grid;gap:16px}
+.seg{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--line-strong);border-radius:10px;overflow:hidden}
+.seg button{border:0;border-right:1px solid var(--line);background:var(--surface);padding:12px 6px;cursor:pointer;display:grid;gap:3px}
+.seg button:last-child{border-right:0}
+.seg button b{font:700 18px/1 var(--display);font-stretch:115%}
+.seg button span{font-size:11.5px;color:var(--muted)}
+.seg button[aria-checked="true"]{background:var(--ink);color:var(--bg)}
+.seg button[aria-checked="true"] span{color:var(--bg);opacity:.8}
+.dial-body{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.dial-body>div{display:grid;gap:6px;align-content:start}
+.dial-q{border-left:3px solid var(--you);padding:6px 0 6px 12px;color:var(--ink);font-size:14.5px}
+
+/* watch-outs */
+.watch-group{margin-top:26px}
+.watch-group>h3{margin-bottom:12px;display:flex;gap:10px;align-items:baseline}
+.watch-group>h3 small{font:500 12.5px var(--sans);color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:8px;align-content:start}
+.card .top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.card h4{margin:0;font:600 14.5px/1.3 var(--sans)}
+.card p{font-size:13.5px;color:var(--muted)}
+.card .fix{font-size:13px;color:var(--ink);border-top:1px dashed var(--line);padding-top:8px}
+.card .fix b{font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-right:6px}
+footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--muted);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+
+@media (max-width:900px){
+  .hero{grid-template-columns:1fr;gap:24px}
+  .arch-grid{grid-template-columns:1fr}
+  .node-panel{position:static}
+  .stage-card{grid-template-columns:1fr 1fr}
+  .stage-card>div:nth-child(2){border-right:0}
+  .stage-card>div:nth-child(-n+2){border-bottom:1px solid var(--line)}
+  .chain{grid-template-columns:1fr;gap:0}
+  .link{height:40px}
+  .link svg{transform:rotate(90deg)}
+  .chain-foot{grid-template-columns:1fr}
+  .comms{grid-template-columns:1fr}
+  .comms .figure{border-right:0;border-bottom:1px solid var(--line)}
+  .dial-body{grid-template-columns:1fr}
+  .tt-foot{grid-template-columns:1fr}
+}
+@media (max-width:520px){
+  .stage-card{grid-template-columns:1fr}
+  .stage-card>div{border-right:0;border-bottom:1px solid var(--line)}
+  .seg button span{display:none}
+  .nav{display:none}
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+}
+</style>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand">AGENTIC WORKFLOW <span>v2.2</span></div>
+    <nav class="nav" aria-label="Sections">
+      <a href="#architecture">Architecture</a>
+      <a href="#lifecycle">Lifecycle</a>
+      <a href="#gates">Gates</a>
+      <a href="#tests">Tests</a>
+      <a href="#messages">Messages</a>
+      <a href="#dial">Planning dial</a>
+      <a href="#watch">Watch-outs</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <div>
+      <p class="eyebrow">How the workflow is built · design v2.2</p>
+      <h1 style="margin-top:14px">Specs in. Proven, reviewed code out.</h1>
+      <p class="lede">You write the specs and scenarios. An orchestrator runs a team of Claude roles, and Codex writes the tests and reviews the work. <strong>Every approval is bound to your account and to the exact bytes you approved</strong>, so no agent can fake one, including the orchestrator.</p>
+      <div class="legend" aria-label="Colour legend">
+        <span class="chip c-you"><i></i>You</span>
+        <span class="chip c-claude"><i></i>Claude role</span>
+        <span class="chip c-codex"><i></i>Codex role</span>
+        <span class="chip c-enf"><i></i>Enforcement</span>
+        <span class="chip c-file"><i></i>Repo file</span>
+      </div>
+    </div>
+    <aside class="you-do">
+      <p class="eyebrow">What you do per change (P1)</p>
+      <ol>
+        <li><span>Write <code>proposal.md</code> and <code>spec-delta.md</code>: rule tables, journeys, UI states.</span></li>
+        <li><span>Approve the <b>spec</b> gate PR, after answering the orchestrator's batched questions.</span></li>
+        <li><span>Approve the <b>design</b> gate PR: contract diff, migration draft, mockups.</span></li>
+        <li><span>Approve the <b>tests</b> gate PR: Codex's tests plus the baseline run.</span></li>
+        <li><span>Merge the implementation PR once CI and the Codex review are green.</span></li>
+      </ol>
+      <p class="note">Everything else is agents. A P0 change (typo, dependency patch) skips the team and the gates, but must still pass every check.</p>
+    </aside>
+  </section>
+
+  <!-- ARCHITECTURE -->
+  <section class="sec" id="architecture" aria-labelledby="h-arch">
+    <div class="sec-head">
+      <p class="eyebrow">01 · Architecture</p>
+      <h2 id="h-arch">Four layers: you, the team, the repo, the enforcement</h2>
+      <p>Dots show traffic: questions going up to you, work going out to roles, decisions flowing into files, PRs flowing into CI. Click any box to see what it owns and what it can't do.</p>
+    </div>
+    <div class="arch-grid">
+      <div class="panel" id="archPanel">
+        <div class="figure">
+          <svg id="arch" viewBox="0 0 1000 600" role="img" aria-labelledby="arch-t arch-d">
+            <title id="arch-t">Architecture of the agentic workflow</title>
+            <desc id="arch-d">You at the top talk only to the orchestrator. The orchestrator directs seven roles. Roles write decisions into repo memory files on the left. Their PRs go through local hooks, CI gates and a GitHub ruleset before reaching main, and only your account can approve and merge.</desc>
+            <defs>
+              <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="var(--line-strong)"/></marker>
+            </defs>
+            <g class="bands">
+              <rect x="8" y="10" width="984" height="84" rx="12"/>
+              <rect x="8" y="104" width="232" height="488" rx="12"/>
+              <rect x="252" y="104" width="712" height="292" rx="12"/>
+              <rect x="252" y="406" width="712" height="186" rx="12"/>
+            </g>
+            <g class="band-labels">
+              <text x="24" y="34">YOU</text>
+              <text x="24" y="128">REPO MEMORY</text>
+              <text x="268" y="128">AGENT TEAM</text>
+              <text x="268" y="430">ENFORCEMENT</text>
+            </g>
+            <g class="edges">
+              <path id="e-you" d="M608 74 L608 140"/>
+              <path id="e-orch-db" d="M608 184 L314 240"/>
+              <path id="e-orch-ux" d="M608 184 L412 240"/>
+              <path id="e-orch-be" d="M608 184 L510 240"/>
+              <path id="e-orch-fe" d="M608 184 L608 240"/>
+              <path id="e-orch-int" d="M608 184 L706 240"/>
+              <path id="e-orch-qa" d="M608 184 L804 240"/>
+              <path id="e-orch-rev" d="M608 184 L902 240"/>
+              <path id="e-peer" class="peer" d="M530 288 Q559 322 588 288"/>
+              <path d="M804 288 L804 318"/>
+              <path d="M902 288 L902 318"/>
+              <path class="bus" d="M244 159 L244 495"/>
+              <path class="tick" d="M224 159 L244 159"/><path class="tick" d="M224 215 L244 215"/><path class="tick" d="M224 271 L244 271"/><path class="tick" d="M224 327 L244 327"/><path class="tick" d="M224 383 L244 383"/><path class="tick" d="M224 439 L244 439"/><path class="tick" d="M224 495 L244 495"/>
+              <path id="e-bus1" class="flow" d="M518 162 L246 162" marker-end="url(#ah)"/>
+              <path id="e-bus2" class="flow" d="M268 264 L246 264" marker-end="url(#ah)"/>
+              <path id="e-hooks" class="flow" d="M500 288 L370 442" marker-end="url(#ah)"/>
+              <path id="e-pr" class="flow" d="M706 288 L652 442" marker-end="url(#ah)"/>
+              <path d="M744 484 L760 484"/>
+              <path id="e-ci-main" d="M614 524 L614 545" marker-end="url(#ah)"/>
+              <path id="e-rail" class="flow" d="M948 470 L978 470 L978 52 L700 52" marker-end="url(#ah)"/>
+            </g>
+            <g class="elabels">
+              <text class="elabel" x="618" y="112">batched questions ↑ · answers ↓</text>
+              <text class="elabel" x="559" y="340" text-anchor="middle">peer messages</text>
+              <text class="elabel" x="300" y="154">decisions land in files</text>
+              <text class="elabel" x="404" y="360" text-anchor="end">every write checked</text>
+              <text class="elabel" x="690" y="380">implementation PR</text>
+              <text class="elabel" x="752" y="44">approve &amp; merge: your account only</text>
+            </g>
+            <g id="pulses"></g>
+            <g class="nodes">
+              <g class="node k-you" data-node="you" tabindex="0" role="button" aria-label="You"><rect x="518" y="30" width="180" height="44" rx="8"/><text class="nm" x="608" y="49">You</text><text class="sb" x="608" y="65">specs · 3 gates · merge</text></g>
+              <g class="node k-claude" data-node="orch" tabindex="0" role="button" aria-label="Orchestrator"><rect x="518" y="140" width="180" height="44" rx="8"/><text class="nm" x="608" y="159">orchestrator</text><text class="sb" x="608" y="175">team lead · never codes</text></g>
+              <g class="node k-claude" data-node="db" tabindex="0" role="button" aria-label="db-designer"><rect x="268" y="240" width="92" height="48" rx="8"/><text class="nm" x="314" y="261">db-designer</text><text class="sb" x="314" y="277">design stage</text></g>
+              <g class="node k-claude" data-node="ux" tabindex="0" role="button" aria-label="ui-ux-designer"><rect x="366" y="240" width="92" height="48" rx="8"/><text class="nm" x="412" y="261" style="font-size:11.5px">ui-ux-designer</text><text class="sb" x="412" y="277">design stage</text></g>
+              <g class="node k-claude" data-node="be" tabindex="0" role="button" aria-label="backend-dev"><rect x="464" y="240" width="92" height="48" rx="8"/><text class="nm" x="510" y="261">backend-dev</text><text class="sb" x="510" y="277">own worktree</text></g>
+              <g class="node k-claude" data-node="fe" tabindex="0" role="button" aria-label="frontend-dev"><rect x="562" y="240" width="92" height="48" rx="8"/><text class="nm" x="608" y="261">frontend-dev</text><text class="sb" x="608" y="277">own worktree</text></g>
+              <g class="node k-claude" data-node="int" tabindex="0" role="button" aria-label="integrator"><rect x="660" y="240" width="92" height="48" rx="8"/><text class="nm" x="706" y="261">integrator</text><text class="sb" x="706" y="277">merges, verifies</text></g>
+              <g class="node k-codex" data-node="qa" tabindex="0" role="button" aria-label="qa"><rect x="758" y="240" width="92" height="48" rx="8"/><text class="nm" x="804" y="261">qa</text><text class="sb" x="804" y="277">Codex · tests</text></g>
+              <g class="node k-codex" data-node="rev" tabindex="0" role="button" aria-label="reviewer"><rect x="856" y="240" width="92" height="48" rx="8"/><text class="nm" x="902" y="261">reviewer</text><text class="sb" x="902" y="277">Codex · review</text></g>
+              <g class="node k-codex" data-node="runner" tabindex="0" role="button" aria-label="Cross-provider runner"><rect x="758" y="318" width="190" height="38" rx="8"/><text class="nm" x="853" y="334">runner → Codex CLI</text><text class="sb" x="853" y="349">one turn · hash-bound verdict</text></g>
+
+              <g class="node k-file" data-node="m-context" tabindex="0" role="button" aria-label="context.md"><rect x="24" y="140" width="200" height="38" rx="7"/><text class="nm" x="124" y="156">context.md</text><text class="sb" x="124" y="170">always-loaded index</text></g>
+              <g class="node k-file" data-node="m-glossary" tabindex="0" role="button" aria-label="glossary.md"><rect x="24" y="196" width="200" height="38" rx="7"/><text class="nm" x="124" y="212">glossary.md</text><text class="sb" x="124" y="226">one word per concept</text></g>
+              <g class="node k-file" data-node="m-specs" tabindex="0" role="button" aria-label="specs folder"><rect x="24" y="252" width="200" height="38" rx="7"/><text class="nm" x="124" y="268">specs/</text><text class="sb" x="124" y="282">living spec · row IDs</text></g>
+              <g class="node k-file" data-node="m-changes" tabindex="0" role="button" aria-label="changes folder"><rect x="24" y="308" width="200" height="38" rx="7"/><text class="nm" x="124" y="324">changes/&lt;id&gt;/</text><text class="sb" x="124" y="338">delta · design · tests · approvals</text></g>
+              <g class="node k-file" data-node="m-decisions" tabindex="0" role="button" aria-label="decisions folder"><rect x="24" y="364" width="200" height="38" rx="7"/><text class="nm" x="124" y="380">decisions/</text><text class="sb" x="124" y="394">ADRs</text></g>
+              <g class="node k-file" data-node="m-lessons" tabindex="0" role="button" aria-label="lessons.md"><rect x="24" y="420" width="200" height="38" rx="7"/><text class="nm" x="124" y="436">lessons.md</text><text class="sb" x="124" y="450">stage + warrant</text></g>
+              <g class="node k-file" data-node="m-progress" tabindex="0" role="button" aria-label="progress folder"><rect x="24" y="476" width="200" height="38" rx="7"/><text class="nm" x="124" y="492">progress/</text><text class="sb" x="124" y="506">handoffs, closed with a reason</text></g>
+
+              <g class="node k-enf" data-node="hooks" tabindex="0" role="button" aria-label="Local hooks"><rect x="268" y="444" width="200" height="80" rx="8"/><text class="nm" x="368" y="470">local hooks</text><text class="sb" x="368" y="489">early feedback</text><text class="sb" x="368" y="505">not a security boundary</text></g>
+              <g class="node k-enf" data-node="ci" tabindex="0" role="button" aria-label="CI gates"><rect x="484" y="444" width="260" height="80" rx="8"/><text class="nm" x="614" y="470">CI gates · the guarantee</text><text class="sb" x="614" y="489">gate-check · byte-identity</text><text class="sb" x="614" y="505">trace-check · memory-check · holdout</text></g>
+              <g class="node k-enf" data-node="gh" tabindex="0" role="button" aria-label="GitHub ruleset and bot identity"><rect x="760" y="444" width="188" height="80" rx="8"/><text class="nm" x="854" y="470">GitHub ruleset</text><text class="sb" x="854" y="489">bot identity can't</text><text class="sb" x="854" y="505">approve or merge</text></g>
+              <g class="node k-go" data-node="main" tabindex="0" role="button" aria-label="main branch"><rect x="564" y="546" width="100" height="32" rx="8"/><text class="nm" x="614" y="567">main</text></g>
+            </g>
+            <text x="24" y="548" class="elabel">versioned · readable by any agent</text>
+            <text x="24" y="566" class="elabel">the only durable record</text>
+          </svg>
+        </div>
+        <div class="arch-foot">
+          <span>Teal dots are you, copper are Claude, indigo are Codex, grey are files.</span>
+          <button class="btn" id="motionBtn" type="button" aria-pressed="false">Pause motion</button>
+        </div>
+      </div>
+      <aside class="panel node-panel" id="nodePanel" aria-live="polite"></aside>
+    </div>
+  </section>
+
+  <!-- LIFECYCLE -->
+  <section class="sec" id="lifecycle" aria-labelledby="h-life">
+    <div class="sec-head">
+      <p class="eyebrow">02 · How a change moves</p>
+      <h2 id="h-life">Nine stations, three gates, one merge</h2>
+      <p>Press play to watch a P1 change travel from proposal to merge, or click any station. Badges mark where you approve (teal) and where CI decides (grey).</p>
+    </div>
+    <div class="panel">
+      <div class="track-wrap">
+        <div class="track-box" id="trackBox"><span class="rail" id="trackRail"></span><span class="fill" id="trackFill"></span><ol class="track" id="track"></ol></div>
+      </div>
+      <div class="stage-title">
+        <h3 id="stageName">1 · Propose</h3>
+        <div class="controls">
+          <button class="btn" id="prevBtn" type="button">Back</button>
+          <button class="btn primary" id="playBtn" type="button">Play</button>
+          <button class="btn" id="nextBtn" type="button">Next</button>
+        </div>
+      </div>
+      <div class="stage-card" id="stageCard"></div>
+    </div>
+  </section>
+
+  <!-- GATES -->
+  <section class="sec" id="gates" aria-labelledby="h-gates">
+    <div class="sec-head">
+      <p class="eyebrow">03 · Gates and approval records</p>
+      <h2 id="h-gates">Approvals are chained. Break one and see what happens downstream.</h2>
+      <p>Each gate records the sha256 of the files it covers and the record it was approved against. It only counts if it reached main through a PR approved and merged by your account. Try the buttons: edit a file after approval, re-approve, or have the bot try to approve its own work.</p>
+    </div>
+    <div class="panel">
+      <div class="chain" id="chain"></div>
+      <div class="chain-foot">
+        <div style="display:grid;gap:12px;align-content:start">
+          <div class="impl"><span>Implementation PR:</span><span id="implPill" class="pill p-go">allowed</span></div>
+          <div class="controls">
+            <button class="btn warn" type="button" data-act="editSpec">Edit spec-delta.md</button>
+            <button class="btn warn" type="button" data-act="editDesign">Edit design draft</button>
+            <button class="btn warn" type="button" data-act="bot">Bot merges an approval</button>
+            <button class="btn" type="button" data-act="reset">Reset</button>
+          </div>
+          <p style="font-size:13px;color:var(--muted)">Red means the gate's own files changed after approval, or a gate upstream of it is invalid. Amber means its files are unchanged, but it was approved against an older upstream record and needs your re-approval.</p>
+        </div>
+        <pre class="term" id="term" aria-live="polite" aria-label="gate-check output"></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- TESTS -->
+  <section class="sec" id="tests" aria-labelledby="h-tests">
+    <div class="sec-head">
+      <p class="eyebrow">04 · Tests: staged, baselined, landed together</p>
+      <h2 id="h-tests">Tests are locked by hash, not by sitting on main</h2>
+      <p>Example change: <em>"limit listing prices to 1–1,000,000 and reject duplicate submits"</em>. Codex stages the tests, CI runs them against today's main to record a baseline, you approve both, and the implementation PR brings the code and the tests to main in one merge. Rows that already pass are fine; at least one must fail.</p>
+    </div>
+    <div class="panel">
+      <div class="tt-wrap">
+        <table class="tt" id="tt">
+          <thead><tr>
+            <th scope="col">Row</th><th scope="col">Scenario</th>
+            <th scope="col" data-col="0">1 · Staged by Codex</th>
+            <th scope="col" data-col="1">2 · Baseline vs main</th>
+            <th scope="col" data-col="2">3 · Implementation PR</th>
+            <th scope="col" data-col="3">4 · On main</th>
+          </tr></thead>
+          <tbody id="ttBody"></tbody>
+        </table>
+      </div>
+      <div class="tt-foot">
+        <p class="tt-status" id="ttStatus" aria-live="polite"></p>
+        <div class="controls">
+          <button class="btn primary" type="button" id="ttPlay">Replay</button>
+          <button class="btn warn" type="button" data-tt="edit">Builder edits test R4</button>
+          <button class="btn warn" type="button" data-tt="weak">A "new" row already passes</button>
+          <button class="btn warn" type="button" data-tt="abandon">Change abandoned</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MESSAGES -->
+  <section class="sec" id="messages" aria-labelledby="h-msg">
+    <div class="sec-head">
+      <p class="eyebrow">05 · Messages coordinate, files decide</p>
+      <h2 id="h-msg">What happens when two agents agree on something</h2>
+      <p>Agents can message each other directly. An agreement only counts once it's in a file, and if that file is covered by an approved gate, the gate breaks and the decision comes back to you through the orchestrator.</p>
+    </div>
+    <div class="panel">
+      <div class="comms">
+        <div class="figure">
+          <svg id="comms" viewBox="0 0 760 330" role="img" aria-labelledby="comms-t">
+            <title id="comms-t">Message flow between frontend-dev, backend-dev, a gated contract file, the orchestrator and you</title>
+            <path class="cline" d="M130 250 L370 250"/>
+            <path class="cline" d="M370 250 L630 250"/>
+            <path class="cline" d="M370 250 L370 70"/>
+            <path class="cline" d="M370 70 L110 70"/>
+            <path class="cline" d="M370 70 L630 70"/>
+            <g class="cn k-you"><rect x="40" y="48" width="140" height="44" rx="8"/><text class="nm" x="110" y="67">You</text><text class="sb" x="110" y="83">hears from orchestrator only</text></g>
+            <g class="cn k-claude"><rect x="290" y="48" width="160" height="44" rx="8"/><text class="nm" x="370" y="67">orchestrator</text><text class="sb" x="370" y="83">batches questions</text></g>
+            <g class="cn k-file" id="cAudit"><rect class="fstate" x="540" y="48" width="180" height="44" rx="8"/><text class="nm" x="630" y="67">decisions-audit.md</text><text class="sb" id="cAuditSub" x="630" y="83">1 decision recorded</text></g>
+            <g class="cn k-claude"><rect x="60" y="228" width="140" height="44" rx="8"/><text class="nm" x="130" y="247">frontend-dev</text><text class="sb" x="130" y="263">apps/web/**</text></g>
+            <g class="cn k-claude"><rect x="300" y="228" width="140" height="44" rx="8"/><text class="nm" x="370" y="247">backend-dev</text><text class="sb" x="370" y="263">apps/api/**</text></g>
+            <g class="cn k-file" id="cFile"><rect class="fstate" x="530" y="228" width="200" height="44" rx="8"/><text class="nm" x="630" y="247">design/openapi.diff.yaml</text><text class="sb" id="cFileSub" x="630" y="263">design gate: re-approved</text></g>
+            <g id="bubble" style="opacity:0"><rect x="-80" y="-14" width="160" height="28" rx="14"/><text x="0" y="4">message</text></g>
+          </svg>
+        </div>
+        <ol class="steps" id="steps"></ol>
+      </div>
+      <div class="comms-foot">
+        <button class="btn primary" type="button" id="commsPlay">Play the conversation</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- DIAL -->
+  <section class="sec" id="dial" aria-labelledby="h-dial">
+    <div class="sec-head">
+      <p class="eyebrow">06 · Planning dial</p>
+      <h2 id="h-dial">How much process a change gets</h2>
+      <p>The orchestrator proposes a level and you confirm it. The question isn't "is this important?" but whether a wrong plan would be expensive, hard to undo, and invisible from inside.</p>
+    </div>
+    <div class="panel dial">
+      <div class="seg" role="radiogroup" aria-label="Planning level" id="seg"></div>
+      <div class="dial-body" id="dialBody"></div>
+      <p class="dial-q">Would a wrong plan be expensive, hard to undo, and invisible to the agent that wrote it? If yes, go up a level.</p>
+    </div>
+  </section>
+
+  <!-- WATCH-OUTS -->
+  <section class="sec" id="watch" aria-labelledby="h-watch">
+    <div class="sec-head">
+      <p class="eyebrow">07 · What to look out for</p>
+      <h2 id="h-watch">Where this design can still fail</h2>
+      <p>Grouped by kind. "Unproven" items get settled by Trial 1; the rest are risks to watch for as long as the workflow runs.</p>
+    </div>
+    <div id="watchRoot"></div>
+  </section>
+
+  <footer>
+    <span>Source: <code>docs/specs/2026-09-29-agentic-workflow-design.md</code> (v2.2). Example data in the demos is illustrative.</span>
+    <span>Built 2026-10-05</span>
+  </footer>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  var SVGNS = "http://www.w3.org/2000/svg";
+  function wait(ms) { return new Promise(function (res) { setTimeout(res, reduce ? 0 : ms); }); }
+  function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+  /* ---------------- 01 ARCHITECTURE ---------------- */
+  var NODES = {
+    you: { title: "You", tags: [["you", "human"], ["you", "only approver"]],
+      body: "Write the proposal and the spec delta. Approve three gate PRs per P1 change (spec, design, tests) and merge the implementation PR.",
+      list: ["Hear only from the orchestrator, in batched questions with a recommendation", "Your GitHub account is the only one that can approve or merge", "Confirm the planning-dial level the orchestrator proposes"],
+      cant: "Delegate a gate. Nothing in the team can approve on your behalf." },
+    orch: { title: "orchestrator", tags: [["claude", "Claude · top tier"], ["claude", "session lifetime"]],
+      body: "Plans the change, proposes a planning-dial level, spawns roles, owns the task list and progress log, and is your only point of contact.",
+      list: ["Owns docs/changes/<id>/tasks.md and progress/", "Runs CLARIFY: gap hunt + spec-lint", "Writes decisions-audit.md before the change closes"],
+      cant: "Write product code or approve anything. Its own plan approvals inside the team count for nothing." },
+    db: { title: "db-designer", tags: [["claude", "Claude · top tier"], ["claude", "design stage only"]],
+      body: "Proposes the schema and the migration draft, and drafts ADRs for schema decisions.",
+      list: ["Writes into docs/changes/<id>/design/ only", "Migration stays a draft until the implementation PR copies it, byte for byte"],
+      cant: "Touch db/migrations on main directly. Drafts live under docs/changes/ so nothing deployable lands early." },
+    ux: { title: "ui-ux-designer", tags: [["claude", "Claude · top tier"], ["claude", "design stage only"]],
+      body: "Produces UI states and mockups and adds UI-state rows to the spec delta.",
+      list: ["Writes design/** and the UI part of design.md", "UI states become rows, so they get tests too"],
+      cant: "Stay alive after the design gate. Spawned for the design stage, then ends." },
+    be: { title: "backend-dev", tags: [["claude", "Claude · mid tier"], ["claude", "per change · own worktree"]],
+      body: "Builds the API against the approved contract, test-first, in its own git worktree and branch.",
+      list: ["Owns apps/api/** and the contract implementation", "Runs the staged tests locally with wf test-staged <id>", "Stuck 3 times → Codex rescue → orchestrator → you"],
+      cant: "Write outside its owned paths (a hook blocks it), or edit a staged test (CI byte-identity check fails)." },
+    fe: { title: "frontend-dev", tags: [["claude", "Claude · mid tier"], ["claude", "per change · own worktree"]],
+      body: "Builds the web app against the same approved contract, in parallel with backend-dev.",
+      list: ["Owns apps/web/**", "Works in parallel because the contract was fixed at the design gate"],
+      cant: "Change the contract. A contract change invalidates the design gate and goes back to you." },
+    int: { title: "integrator", tags: [["claude", "Claude · mid tier"], ["claude", "per change"]],
+      body: "Merges the builders' branches in order, runs verify --full, copies approved staging into live locations and opens the implementation PR.",
+      list: ["Only merge commits", "Serializes builders who touched overlapping files"],
+      cant: "Approve or merge into main. It opens the PR; you merge it." },
+    qa: { title: "qa → Codex", tags: [["codex", "Codex via runner"], ["codex", "per change"]],
+      body: "A thin Claude wrapper that calls Codex to turn approved rows plus the contract into acceptance tests and hidden holdout cases.",
+      list: ["Writes docs/changes/<id>/tests/** only, staged and not live", "Rules on test disputes; an amended test means a new tests gate", "Holdout variants live outside the repo, so builders can't read them"],
+      cant: "Be the same model family as the builders. Independence is the point." },
+    rev: { title: "reviewer → Codex", tags: [["codex", "Codex CLI · fresh session"], ["codex", "read-only"]],
+      body: "Adversarial review of the implementation PR in a fresh Codex session with a read-only sandbox.",
+      list: ["Classifies each miss: CONTEXT-GAP (fix the spec template) or JUDGMENT-GAP (add a check)", "Looks for test-shaped special cases such as if (email === 'test@x.com')"],
+      cant: "Edit files or run as a builder's helper." },
+    runner: { title: "Cross-provider runner", tags: [["codex", "plain script"], ["enf", "claudex-loop pattern"]],
+      body: "The only way Claude roles reach Codex: one CLI turn per call, with the verdict validated against a schema.",
+      list: ["Each verdict is bound to the sha256 of what was judged", "Inspection always starts a fresh session", "If Codex quota runs out: fallback to a fresh Claude subagent, labelled reduced independence"],
+      cant: "Treat an empty, failed or malformed result as approval." },
+    "m-context": { title: "docs/context.md", tags: [["file", "always loaded"], ["file", "≤150 lines"]],
+      body: "The index every agent reads first: product, commands, map of the docs. One per package in a monorepo, with the same name.", list: ["Re-injected after compaction by the refocus hook"], cant: "Grow into a dumping ground. memory-check enforces the size limit." },
+    "m-glossary": { title: "docs/glossary.md", tags: [["file", "always loaded"]],
+      body: "One definition per domain term, with banned synonyms on a 'Not:' line.", list: ["spec-lint fails a delta that uses a term missing from the glossary"], cant: "Hold behaviour or implementation detail. Terms only." },
+    "m-specs": { title: "docs/specs/<capability>/", tags: [["file", "living spec"]],
+      body: "What the system does now, as rule tables, journeys and UI states, each row with a stable ID.", list: ["Each change's delta is folded in when the change is archived"], cant: "Drift silently: an unarchived merged change fails memory-check." },
+    "m-changes": { title: "docs/changes/<id>/", tags: [["file", "one folder per change"]],
+      body: "Everything about one change: proposal, spec delta, design drafts, staged tests, baseline, approval records, tasks and the decisions audit.",
+      list: ["approvals/<gate>.json: hashes of covered files + the upstream record it requires", "design/ and tests/ are staging: never live until the implementation PR"], cant: "Be edited after a gate without invalidating it." },
+    "m-decisions": { title: "docs/decisions/", tags: [["file", "ADRs"]],
+      body: "One file per decision that is expensive to reverse, would puzzle a future reader, and was a genuine trade-off.", list: ["A contract or schema change needs an ADR link or an explicit no-ADR reason", "Number assigned at merge, so parallel changes don't collide"], cant: "Record trivial choices." },
+    "m-lessons": { title: "docs/lessons.md", tags: [["file", "always loaded"], ["file", "≤50 entries"]],
+      body: "Mistakes agents made and the rules that came out of them. Each entry carries a maturity stage and the incident that earned it.",
+      list: ["wip → provisional → established → canonical, or superseded / retired", "Promotion to a rule or hook needs your review"], cant: "Overgeneralise silently: unreviewed lessons stay at wip." },
+    "m-progress": { title: "docs/progress/<branch>.md", tags: [["file", "handoff log"]],
+      body: "Where each branch stands, so any session can resume from files alone.",
+      list: ["Every item closes with a reason: handed-off, blocked, no-follow-on or canceled", "Built partly from facts (git log, verify results), not just agent prose"], cant: "Say 'done' with no reason." },
+    hooks: { title: "Local hooks", tags: [["enf", "early feedback"]],
+      body: "Fast checks on the dev machine, so agents learn about problems before CI does.",
+      list: ["PreToolUse: no writes outside a role's owned paths", "TaskCreated: no build task until the gates are valid", "TaskCompleted: verify --fast must pass", "Stop: progress log updated · refocus after compaction"],
+      cant: "Act as security. An agent can edit its own settings, which is why CI is the guarantee." },
+    ci: { title: "CI gates", tags: [["enf", "the guarantee"]],
+      body: "Runs on every PR, out of the agents' reach.",
+      list: ["gate-check: chained hashes + your account merged the record", "byte-identity: live contract, migration, tests, harness = approved staging", "trace-check: every row executed and passed, no unretired deletions", "memory-check · holdout cases · verify --full"],
+      cant: "Prove the tests are good. It proves they ran and weren't altered." },
+    gh: { title: "GitHub ruleset + bot identity", tags: [["enf", "GitHub Pro on private repos"]],
+      body: "Agents use a low-privilege bot token: they can push branches and open PRs, nothing more.",
+      list: ["PR required, checks required, code-owner review on protected paths", "Approval records only count if merged by an account in workflow.config.json → approvers"],
+      cant: "Protect anything if agents run with your own gh login. That's the single biggest bypass." },
+    main: { title: "main", tags: [["file", "always green"]],
+      body: "Only ever holds tests whose code has shipped, so every live test passes.", list: ["Code and its tests arrive in the same merge", "Old tests are deleted only in the PR that ships their replacement"], cant: "Receive a migration or contract before its implementation." }
+  };
+  var panel = $("#nodePanel");
+  function showNode(id) {
+    var n = NODES[id]; if (!n) return;
+    panel.textContent = "";
+    var kinds = el("div", "np-kind");
+    n.tags.forEach(function (t) { kinds.appendChild(el("span", "tag " + t[0], t[1])); });
+    panel.appendChild(kinds);
+    panel.appendChild(el("h3", null, n.title));
+    panel.appendChild(el("p", "np-body", n.body));
+    var ul = el("ul"); n.list.forEach(function (x) { ul.appendChild(el("li", null, x)); }); panel.appendChild(ul);
+    var cant = el("p", "hint"); var b = el("b", null, "Can't: "); cant.appendChild(b); cant.appendChild(document.createTextNode(n.cant)); panel.appendChild(cant);
+    panel.classList.remove("fadein"); void panel.offsetWidth; panel.classList.add("fadein");
+    $$("#arch .node").forEach(function (g) { g.classList.toggle("sel", g.getAttribute("data-node") === id); });
+  }
+  $$("#arch .node").forEach(function (g) {
+    g.addEventListener("click", function () { showNode(g.getAttribute("data-node")); });
+    g.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showNode(g.getAttribute("data-node")); } });
+  });
+  showNode("orch");
+
+  var PULSES = [
+    ["e-you", 2600, 0, "you", true], ["e-you", 2600, 1300, "you", false],
+    ["e-orch-be", 2300, 200, "claude", false], ["e-orch-fe", 2300, 900, "claude", false],
+    ["e-orch-qa", 2700, 500, "codex", false], ["e-orch-db", 2900, 1600, "claude", false],
+    ["e-peer", 1900, 0, "claude", false], ["e-peer", 1900, 950, "claude", true],
+    ["e-bus1", 2700, 300, "file", false], ["e-bus2", 2100, 800, "file", false],
+    ["e-hooks", 2500, 400, "enf", false], ["e-pr", 2500, 1200, "claude", false],
+    ["e-rail", 4600, 0, "you", false], ["e-ci-main", 1500, 300, "go", false]
+  ];
+  var layer = document.getElementById("pulses");
+  var pulses = PULSES.map(function (p) {
+    var path = document.getElementById(p[0]);
+    var c = document.createElementNS(SVGNS, "circle");
+    c.setAttribute("r", "4.5"); c.setAttribute("class", "pulse pz-" + p[3]); layer.appendChild(c);
+    return { path: path, len: path.getTotalLength(), dur: p[1], delay: p[2], rev: p[4], c: c };
+  });
+  var running = !reduce;
+  var archPanel = $("#archPanel");
+  function frame(t) {
+    pulses.forEach(function (q) {
+      var x = ((t + q.delay) % q.dur) / q.dur;
+      var fade = Math.min(1, Math.min(x, 1 - x) * 9);
+      var pos = q.rev ? 1 - x : x;
+      var pt = q.path.getPointAtLength(pos * q.len);
+      q.c.setAttribute("cx", pt.x.toFixed(1)); q.c.setAttribute("cy", pt.y.toFixed(1));
+      q.c.style.opacity = fade.toFixed(2);
+    });
+    if (running) requestAnimationFrame(frame);
+  }
+  var motionBtn = $("#motionBtn");
+  function setMotion(on) {
+    running = on;
+    archPanel.classList.toggle("motion-paused", !on);
+    motionBtn.textContent = on ? "Pause motion" : "Play motion";
+    motionBtn.setAttribute("aria-pressed", on ? "false" : "true");
+    pulses.forEach(function (q) { q.c.style.display = on ? "" : "none"; });
+    if (on) requestAnimationFrame(frame);
+  }
+  motionBtn.addEventListener("click", function () { setMotion(!running); });
+  setMotion(!reduce);
+
+  /* ---------------- 02 LIFECYCLE ---------------- */
+  var STAGES = [
+    { n: "0", short: "MAP", name: "Map (brownfield only)", badge: null,
+      who: [["claude", "explorer"], ["you", "you confirm"]],
+      out: ["current-behaviour rows", "characterization tests"],
+      gate: "You confirm the rows and mark which ones are bugs.",
+      watch: "Characterization tests lock in existing bugs unless you mark them. Skip MAP for one-line fixes." },
+    { n: "1", short: "PROPOSE", name: "Propose", badge: null,
+      who: [["you", "you"]],
+      out: ["proposal.md", "spec-delta.md: rule tables, journeys, UI states"],
+      gate: "None yet. This is your main writing time.",
+      watch: "An ambiguous row gets misread the same way by both models. Independence doesn't help with that; spec-lint and CLARIFY do." },
+    { n: "2", short: "CLARIFY", name: "Clarify", badge: ["you", "spec gate"],
+      who: [["claude", "orchestrator"], ["you", "you answer"]],
+      out: ["answers folded into the delta", "glossary terms", "approvals/spec.json"],
+      gate: "SPEC GATE PR: you approve and merge. Record = hashes of proposal.md + spec-delta.md.",
+      watch: "Approval fatigue. If you never reject anything here across 10 changes, the gate is theatre: cut or merge it." },
+    { n: "3", short: "DESIGN", name: "Design", badge: ["you", "design gate"],
+      who: [["claude", "db-designer"], ["claude", "ui-ux-designer"], ["claude", "backend-dev"], ["codex", "Codex (P3+)"]],
+      out: ["design/openapi.diff.yaml", "design/migration.sql (draft)", "mockups, ADR drafts", "task split with owned paths"],
+      gate: "DESIGN GATE PR: record covers design/ and requires the current spec record.",
+      watch: "The contract is fixed here, before tests and builds. That's what lets backend and frontend build in parallel without mismatched interfaces." },
+    { n: "4", short: "TESTS", name: "Tests", badge: ["you", "tests gate"],
+      who: [["codex", "qa → Codex"], ["enf", "CI baseline run"], ["you", "you approve"]],
+      out: ["docs/changes/<id>/tests/ (staged, not live)", "baseline.json: fails / passes per row", "approvals/tests.json"],
+      gate: "TESTS GATE PR: record covers staged tests + baseline and requires the spec and design records.",
+      watch: "A row the delta calls new but which already passes is flagged: either the test is weak or the behaviour exists. You decide." },
+    { n: "5", short: "BUILD", name: "Build", badge: null,
+      who: [["claude", "backend-dev"], ["claude", "frontend-dev"]],
+      out: ["code + unit tests in separate worktrees", "wf test-staged <id> runs locally"],
+      gate: "No human gate. Hooks: owned paths, verify --fast, gate check before any build task starts.",
+      watch: "Stuck 3 times → Codex rescue → orchestrator → you. A wrong locked test → written test dispute → new tests gate. Missing capability → PARTIAL + follow-on change." },
+    { n: "6", short: "INTEGRATE", name: "Integrate", badge: null,
+      who: [["claude", "integrator"]],
+      out: ["builder branches merged in order", "verify --full"],
+      gate: "None. Overlapping edits are serialized, never merged silently.",
+      watch: "Two changes editing the same harness file: the later one needs a rebase and a re-approved tests gate." },
+    { n: "7", short: "PR", name: "Implementation PR", badge: ["ci", "CI"],
+      who: [["claude", "integrator"], ["enf", "CI"]],
+      out: ["code + staged tests, contract and migration copied live", "deletions of rows this change retires"],
+      gate: "CI: chained gates valid, byte-identity of everything copied live, every row executes and passes, memory-check, holdout.",
+      watch: "trace-check proves tests ran, not that they're good. Special-cased inputs pass it; holdout cases and the Codex review must catch them." },
+    { n: "8", short: "MERGE", name: "Review and merge", badge: ["you", "you merge"],
+      who: [["codex", "reviewer → Codex"], ["you", "you merge"], ["claude", "orchestrator archives"]],
+      out: ["findings tagged CONTEXT-GAP or JUDGMENT-GAP", "delta folded into the living spec", "decisions-audit.md"],
+      gate: "You merge. Code and its tests land on main together.",
+      watch: "Count CONTEXT-GAP vs JUDGMENT-GAP misses: the first says fix the spec template, the second says add a check." }
+  ];
+  var track = $("#track"), fill = $("#trackFill"), card = $("#stageCard"), stageName = $("#stageName");
+  STAGES.forEach(function (s, i) {
+    var li = el("li", "station");
+    var b = el("button", null, s.n); b.type = "button"; b.setAttribute("aria-label", "Stage " + s.n + " " + s.name);
+    b.addEventListener("click", function () { stopPlay(); renderStage(i); });
+    li.appendChild(b); li.appendChild(el("span", "lbl", s.short));
+    if (s.badge) li.appendChild(el("span", "gatebadge" + (s.badge[0] === "ci" ? " ci" : ""), s.badge[1]));
+    track.appendChild(li);
+  });
+  var si = 1, timer = null;
+  function renderStage(i) {
+    si = i;
+    $$(".station", track).forEach(function (li, k) { li.classList.toggle("done", k < i); li.classList.toggle("on", k === i); });
+    var box = $("#trackBox").getBoundingClientRect();
+    var btns = $$(".station button", track);
+    var cx = function (b) { var r = b.getBoundingClientRect(); return r.left + r.width / 2 - box.left; };
+    var x0 = cx(btns[0]), xN = cx(btns[btns.length - 1]);
+    var rail = $("#trackRail"); rail.style.left = x0 + "px"; rail.style.width = (xN - x0) + "px";
+    fill.style.left = x0 + "px"; fill.style.width = Math.max(0, cx(btns[i]) - x0) + "px";
+    var s = STAGES[i];
+    stageName.textContent = s.n + " · " + s.name;
+    card.textContent = "";
+    function col(label, node) { var d = el("div"); d.appendChild(el("span", "k", label)); d.appendChild(node); card.appendChild(d); }
+    var who = el("div", "who"); s.who.forEach(function (w2) { who.appendChild(el("span", "tag " + w2[0], w2[1])); }); col("Who acts", who);
+    var ul = el("ul"); s.out.forEach(function (o) { ul.appendChild(el("li", "mono", o)); }); col("Produces", ul);
+    col("Gate", el("p", null, s.gate));
+    col("Watch out", el("p", null, s.watch));
+    card.classList.remove("fadein"); void card.offsetWidth; card.classList.add("fadein");
+    $("#prevBtn").disabled = i === 0; $("#nextBtn").disabled = i === STAGES.length - 1;
+  }
+  function stopPlay() { if (timer) { clearInterval(timer); timer = null; } $("#playBtn").textContent = "Play"; }
+  $("#playBtn").addEventListener("click", function () {
+    if (timer) { stopPlay(); return; }
+    if (si >= STAGES.length - 1) renderStage(0);
+    $("#playBtn").textContent = "Pause";
+    timer = setInterval(function () { if (si >= STAGES.length - 1) { stopPlay(); return; } renderStage(si + 1); }, reduce ? 1800 : 2800);
+  });
+  $("#prevBtn").addEventListener("click", function () { stopPlay(); if (si > 0) renderStage(si - 1); });
+  $("#nextBtn").addEventListener("click", function () { stopPlay(); if (si < STAGES.length - 1) renderStage(si + 1); });
+  window.addEventListener("resize", function () { renderStage(si); });
+  renderStage(1);
+
+  /* ---------------- 03 GATES ---------------- */
+  var ORDER = ["spec", "design", "tests"];
+  var REQ = { spec: [], design: ["spec"], tests: ["spec", "design"] };
+  var COVERS = {
+    spec: ["proposal.md", "spec-delta.md"],
+    design: ["design/openapi.diff.yaml", "design/migration.sql", "design/design.md"],
+    tests: ["tests/** (staged)", "baseline.json"]
+  };
+  function hex() { var s = ""; for (var i = 0; i < 8; i++) s += "0123456789abcdef"[Math.floor(Math.random() * 16)]; return s; }
+  var G;
+  function resetGates() {
+    var a = hex(), b = hex(), c = hex();
+    G = { spec: { own: a, appr: a, rec: hex(), req: {} } };
+    G.design = { own: b, appr: b, rec: hex(), req: { spec: G.spec.rec } };
+    G.tests = { own: c, appr: c, rec: hex(), req: { spec: G.spec.rec, design: G.design.rec } };
+  }
+  function status(g) {
+    var x = G[g];
+    if (x.own !== x.appr) return "changed";
+    for (var i = 0; i < REQ[g].length; i++) {
+      var r = REQ[g][i];
+      if (status(r) !== "valid") return "blocked";
+      if (x.req[r] !== G[r].rec) return "stale";
+    }
+    return "valid";
+  }
+  var LABEL = { valid: ["p-go", "valid"], changed: ["p-stop", "files changed"], blocked: ["p-stop", "upstream invalid"], stale: ["p-hold", "re-approve"] };
+  var term = $("#term");
+  function log(text, cls) {
+    var line = el("span", cls || null, text + "\n"); term.appendChild(line); term.scrollTop = term.scrollHeight;
+  }
+  var chain = $("#chain");
+  var prevSt = {};
+  function renderGates(stagger) {
+    chain.textContent = "";
+    var nowSt = {}; ORDER.forEach(function (g) { nowSt[g] = status(g); });
+    ORDER.forEach(function (g, i) {
+      if (i > 0) {
+        var st = status(g);
+        var link = el("div", "link" + (st === "valid" ? "" : st === "stale" ? " stale" : " bad"));
+        link.innerHTML = '<svg viewBox="0 0 54 24" aria-hidden="true"><path d="M2 12 L52 12"/></svg>';
+        if (stagger && prevSt[g] !== nowSt[g]) { link.classList.add("flash"); link.style.animationDelay = (i * 300 - 150) + "ms"; }
+        chain.appendChild(link);
+      }
+      var s = status(g), x = G[g];
+      var card2 = el("div", "gate st-" + s);
+      if (stagger && prevSt[g] !== s) { card2.classList.add("flash"); card2.style.animationDelay = (i * 300) + "ms"; }
+      var row = el("div", "row");
+      row.appendChild(el("h3", null, g + " gate"));
+      row.appendChild(el("span", "pill " + LABEL[s][0], LABEL[s][1]));
+      card2.appendChild(row);
+      var cov = el("p", "covers"); cov.appendChild(document.createTextNode("Covers ")); COVERS[g].forEach(function (c, k) { if (k) cov.appendChild(document.createTextNode(", ")); cov.appendChild(el("code", null, c)); });
+      card2.appendChild(cov);
+      var dl = el("dl");
+      function dd(k, v) { dl.appendChild(el("dt", null, k)); dl.appendChild(el("dd", null, v)); }
+      dd("files now", "sha256 " + x.own + "…");
+      dd("approved", "sha256 " + x.appr + "…");
+      dd("record", x.rec + "…");
+      REQ[g].forEach(function (r) { dd("requires " + r, x.req[r] + "…" + (x.req[r] === G[r].rec ? " ✓" : " ≠ " + G[r].rec + "…")); });
+      card2.appendChild(dl);
+      if (s !== "valid") {
+        var b = el("button", "btn reapprove", "Re-approve " + g); b.type = "button";
+        b.addEventListener("click", function () { approve(g); });
+        card2.appendChild(b);
+      }
+      chain.appendChild(card2);
+    });
+    var allOk = ORDER.every(function (g) { return status(g) === "valid"; });
+    prevSt = nowSt;
+    var p = $("#implPill"); p.className = "pill " + (allOk ? "p-go" : "p-stop"); p.textContent = allOk ? "allowed" : "blocked by gate-check";
+  }
+  function approve(g) {
+    for (var i = 0; i < REQ[g].length; i++) {
+      var r = REQ[g][i];
+      if (status(r) !== "valid") { log("$ wf approve " + g, "cmd"); log("refused: " + r + " gate is not valid. Approve upstream first.", "bad"); return; }
+    }
+    var x = G[g]; x.appr = x.own; x.rec = hex(); x.req = {};
+    REQ[g].forEach(function (r) { x.req[r] = G[r].rec; });
+    log("$ wf approve " + g + "   → gate PR merged by you", "cmd");
+    log(g + " record " + x.rec + "… written" + (REQ[g].length ? ", bound to " + REQ[g].map(function (r) { return r + " " + G[r].rec + "…"; }).join(", ") : ""), "ok");
+    ORDER.slice(ORDER.indexOf(g) + 1).forEach(function (d) { var s = status(d); if (s !== "valid") log("  " + d + ": " + (s === "stale" ? "approved against an older record → needs re-approval" : "still blocked"), "warn"); });
+    renderGates(true);
+  }
+  $$("[data-act]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var a = b.getAttribute("data-act");
+      if (a === "editSpec") {
+        G.spec.own = hex(); log("$ edit spec-delta.md   (after approval)", "cmd");
+        log("gate-check: spec files sha256 " + G.spec.own + "… ≠ approved " + G.spec.appr + "…", "bad");
+        log("  → spec INVALID → design and tests invalid transitively", "bad");
+      } else if (a === "editDesign") {
+        G.design.own = hex(); log("$ edit design/openapi.diff.yaml   (after approval)", "cmd");
+        log("gate-check: design files sha256 " + G.design.own + "… ≠ approved " + G.design.appr + "…", "bad");
+        log("  → design INVALID → tests invalid → implementation PR blocked", "bad");
+      } else if (a === "bot") {
+        log("$ gate-check approvals/design.json", "cmd");
+        log("  introduced by PR #142 · merged by: wf-bot", "warn");
+        log("  wf-bot is not in workflow.config.json → approvers", "bad");
+        log("  → record ignored. (The ruleset should stop the merge in the first place.)", "bad");
+      } else if (a === "reset") {
+        resetGates(); term.textContent = ""; log("$ reset: all three gates approved by you, chain intact", "ok");
+      }
+      renderGates(true);
+    });
+  });
+  resetGates(); log("$ gate-check --change listing-price-limits", "cmd"); log("spec ✓ · design ✓ (requires spec) · tests ✓ (requires spec, design)", "ok"); renderGates(false);
+
+  /* ---------------- 04 TESTS ---------------- */
+  var ROWS = [
+    { id: "R1", txt: "Unauthenticated request → 401", kind: "existing", base: "pass" },
+    { id: "R2", txt: "Buyer role tries to create a listing → 403", kind: "existing", base: "pass" },
+    { id: "R3", txt: "Price 0 → 422 \"price must be at least 1\"", kind: "new", base: "fail" },
+    { id: "R4", txt: "Price 1,000,001 → 422 \"over the limit\"", kind: "new", base: "fail" },
+    { id: "R5", txt: "Price 999,999 → 201 created", kind: "existing", base: "pass" },
+    { id: "R6", txt: "Same listing submitted twice within 5 s → 409", kind: "new", base: "fail" }
+  ];
+  var ttBody = $("#ttBody"), ttStatus = $("#ttStatus");
+  var cells = {};
+  ROWS.forEach(function (r) {
+    var tr = el("tr");
+    tr.appendChild(el("td", "rid", r.id));
+    var td = el("td"); td.appendChild(el("div", null, r.txt)); td.appendChild(el("div", "kind", r.kind === "new" ? "new behaviour" : "already exists"));
+    tr.appendChild(td);
+    cells[r.id] = [];
+    for (var c = 0; c < 4; c++) { var cell = el("td", "cell"); var m = el("span", "mark hide", ""); cell.appendChild(m); tr.appendChild(cell); cells[r.id].push(m); }
+    ttBody.appendChild(tr);
+  });
+  function setMark(m, cls, text) { m.className = "mark " + cls; m.textContent = text; }
+  function hideAll() { ROWS.forEach(function (r) { cells[r.id].forEach(function (m) { m.className = "mark hide"; m.textContent = ""; }); }); $$("#tt th").forEach(function (th) { th.classList.remove("colhead-on"); }); }
+  function colOn(c) { $$("#tt th[data-col]").forEach(function (th) { th.classList.toggle("colhead-on", +th.getAttribute("data-col") === c); }); }
+  function status2(html) { ttStatus.innerHTML = html; }
+  var ttRun = 0;
+  async function playTests(variant) {
+    var my = ++ttRun; hideAll();
+    function live() { return my === ttRun; }
+    colOn(0); status2("<b>1.</b> Codex writes the tests under <code>docs/changes/&lt;id&gt;/tests/</code>. The runner never discovers them there, so they aren't live.");
+    for (var i = 0; i < ROWS.length; i++) { if (!live()) return; setMark(cells[ROWS[i].id][0], "m-lock", "staged"); await wait(170); }
+    await wait(700); if (!live()) return;
+    colOn(1); status2("<b>2.</b> CI runs the staged tests against today's main and records a baseline. Rows that already pass are fine; at least one must fail.");
+    for (i = 0; i < ROWS.length; i++) {
+      if (!live()) return; var r = ROWS[i]; var base = r.base;
+      if (variant === "weak" && r.id === "R3") { setMark(cells[r.id][1], "m-flag", "passes · flag"); }
+      else setMark(cells[r.id][1], base === "pass" ? "m-pass" : "m-fail", base === "pass" ? "passes" : "fails");
+      await wait(260);
+    }
+    await wait(600); if (!live()) return;
+    if (variant === "weak") {
+      status2("<b>Flagged.</b> R3 is new behaviour in the delta but already passes on main. Either the test is too weak (it doesn't really check the 422) or the rule already exists. <b>You decide before approving</b>; the tests gate isn't merged yet.");
+      colOn(-1); return;
+    }
+    status2("<b>3.</b> You approve the tests and the baseline together: <code>approvals/tests.json</code> records their hashes, bound to the spec and design records. 3 rows fail at baseline ✓");
+    await wait(1400); if (!live()) return;
+    if (variant === "abandon") {
+      ROWS.forEach(function (r) { setMark(cells[r.id][2], "m-idle", "—"); setMark(cells[r.id][3], "m-idle", "unchanged"); });
+      colOn(3);
+      status2("<b>Change abandoned.</b> The staged tests never went live, so main's suite is exactly as it was. Nothing to revert; archive the change as abandoned.");
+      return;
+    }
+    colOn(2); status2("<b>4.</b> The implementation PR copies the staged tests into <code>tests/acceptance/</code> and adds the code. CI checks they're byte-identical to the approved staging, and every row must pass.");
+    for (i = 0; i < ROWS.length; i++) {
+      if (!live()) return; r = ROWS[i];
+      if (variant === "edit" && r.id === "R4") setMark(cells[r.id][2], "m-fail", "≠ approved");
+      else setMark(cells[r.id][2], "m-pass", "copied · passes");
+      await wait(240);
+    }
+    await wait(500); if (!live()) return;
+    if (variant === "edit") {
+      colOn(-1);
+      status2("<b>Blocked.</b> A builder loosened R4's assertion. Its sha256 no longer matches <code>approvals/tests.json</code>, so the byte-identity check fails the PR. A real problem with the test goes through a <b>test dispute</b> and a new tests gate instead.");
+      return;
+    }
+    colOn(3); status2("<b>5.</b> You merge. The code and its six tests land on main in one merge, so main never holds a test without its code.");
+    for (i = 0; i < ROWS.length; i++) { if (!live()) return; setMark(cells[ROWS[i].id][3], "m-pass", "live · green"); await wait(150); }
+    colOn(-1);
+  }
+  function restTests() {
+    ttRun++;
+    ROWS.forEach(function (r) {
+      setMark(cells[r.id][0], "m-lock", "staged");
+      setMark(cells[r.id][1], r.base === "pass" ? "m-pass" : "m-fail", r.base === "pass" ? "passes" : "fails");
+      setMark(cells[r.id][2], "m-pass", "copied · passes");
+      setMark(cells[r.id][3], "m-pass", "live · green");
+    });
+    status2("Finished state of a correct change. <b>Replay</b> to watch it happen step by step, or try one of the failure cases.");
+  }
+  $("#ttPlay").addEventListener("click", function () { playTests(null); });
+  $$("[data-tt]").forEach(function (b) { b.addEventListener("click", function () { playTests(b.getAttribute("data-tt")); }); });
+  restTests();
+
+  /* ---------------- 05 MESSAGES ---------------- */
+  var P = { you: [110, 70], orch: [370, 70], audit: [630, 70], fe: [130, 250], be: [370, 250], file: [630, 250] };
+  var STEPS = [
+    { from: "fe", to: "be", msg: "cents or decimal string?", text: "<b>frontend-dev → backend-dev:</b> should <code>price</code> be integer cents or a decimal string?" },
+    { from: "be", to: "fe", msg: "integer cents", text: "<b>backend-dev → frontend-dev:</b> integer cents. Agreed in chat, but that doesn't count yet." },
+    { from: "be", to: "file", msg: "price: integer", text: "<b>Decision must land in a file.</b> The contract draft is covered by the approved design gate, so editing it <b>invalidates the gate</b>.", fx: "fileBad" },
+    { from: "be", to: "orch", msg: "contract change", text: "<b>backend-dev → orchestrator:</b> contract change needed; the design gate is now invalid and builds pause." },
+    { from: "orch", to: "you", msg: "1 question", text: "<b>orchestrator → you</b>, batched: \"Store price as integer cents? Recommended: yes. Needs design and tests re-approval.\"" },
+    { from: "you", to: "orch", msg: "approved", text: "<b>You approve</b> the new design gate PR, then tests. The orchestrator records the decision in <code>decisions-audit.md</code>.", fx: "done" }
+  ];
+  var stepsEl = $("#steps");
+  STEPS.forEach(function (s) { var li = el("li"); var span = el("span"); span.innerHTML = s.text; li.appendChild(span); stepsEl.appendChild(li); });
+  var bubble = $("#bubble"), bRect = bubble.querySelector("rect"), bText = bubble.querySelector("text");
+  var fileRect = $("#cFile rect"), fileSub = $("#cFileSub"), auditSub = $("#cAuditSub");
+  function fileState(s) {
+    if (s === "bad") { fileRect.style.fill = "var(--stop-soft)"; fileRect.style.stroke = "var(--stop)"; fileSub.textContent = "design gate: INVALID"; }
+    else { fileRect.style.fill = ""; fileRect.style.stroke = ""; fileSub.textContent = "design gate: re-approved"; }
+  }
+  function placeBubble(pt, instant) {
+    if (instant) bubble.style.transition = "none";
+    bubble.style.transform = "translate(" + pt[0] + "px," + (pt[1] - 34) + "px)";
+    if (instant) { void bubble.getBoundingClientRect(); bubble.style.transition = ""; }
+  }
+  var cRun = 0;
+  async function playComms() {
+    var my = ++cRun;
+    fileState("ok"); auditSub.textContent = "0 decisions recorded";
+    for (var i = 0; i < STEPS.length; i++) {
+      if (my !== cRun) return;
+      var s = STEPS[i];
+      $$("li", stepsEl).forEach(function (li, k) { li.classList.toggle("on", k === i); });
+      bText.textContent = s.msg;
+      var w = Math.max(90, bText.getComputedTextLength() + 28);
+      bRect.setAttribute("x", (-w / 2).toFixed(1)); bRect.setAttribute("width", w.toFixed(1));
+      placeBubble(P[s.from], true);
+      bubble.style.opacity = "1";
+      await wait(120);
+      placeBubble(P[s.to], false);
+      await wait(1150);
+      if (my !== cRun) return;
+      if (s.fx === "fileBad") fileState("bad");
+      if (s.fx === "done") { fileState("ok"); auditSub.textContent = "1 decision recorded"; }
+      await wait(1100);
+    }
+    bubble.style.opacity = "0";
+  }
+  $("#commsPlay").addEventListener("click", playComms);
+  fileState("ok");
+
+  /* ---------------- 06 DIAL ---------------- */
+  var DIAL = [
+    { k: "P0", sub: "trivial", when: "Typo, copy change, dependency patch, a refactor with no behaviour change.", runs: "A single builder, no team, no spec, no gates. verify --full must still pass and the contract may not change.", ex: "Bump a patch version of a library; fix a label." },
+    { k: "P1", sub: "default", when: "Ordinary feature or behaviour change.", runs: "The full lifecycle: spec, design and tests gates, parallel build, Codex review.", ex: "Add price limits to listings." },
+    { k: "P2", sub: "+ research", when: "The spec would freeze on an external unknown: an API you haven't used, a library choice.", runs: "P1 plus a research round before CLARIFY ends, returned as cited context, not prescriptions.", ex: "Integrate a payment provider's webhook flow." },
+    { k: "P3", sub: "+ adversarial", when: "Failure would be invisible to its author: auth, money, migrations, concurrency.", runs: "P2 plus a Codex adversarial review of the plan, a mandatory ADR, and a staged rollout.", ex: "Change how sessions are revoked; migrate order totals." },
+    { k: "P4", sub: "+ blind design", when: "The design itself is highly uncertain.", runs: "P3 plus a second agent designs from scratch without reading the first design; the two are compared before going on.", ex: "Introduce offline sync for the mobile app." }
+  ];
+  var seg = $("#seg"), dialBody = $("#dialBody");
+  function showDial(i) {
+    $$("button", seg).forEach(function (b, k) { b.setAttribute("aria-checked", k === i ? "true" : "false"); b.tabIndex = k === i ? 0 : -1; });
+    var d = DIAL[i]; dialBody.textContent = "";
+    [["When", d.when], ["What runs", d.runs], ["Example", d.ex]].forEach(function (p) { var c = el("div"); c.appendChild(el("span", "eyebrow", p[0])); c.appendChild(el("p", null, p[1])); dialBody.appendChild(c); });
+    dialBody.classList.remove("fadein"); void dialBody.offsetWidth; dialBody.classList.add("fadein");
+  }
+  DIAL.forEach(function (d, i) {
+    var b = el("button"); b.type = "button"; b.setAttribute("role", "radio");
+    b.appendChild(el("b", null, d.k)); b.appendChild(el("span", null, d.sub));
+    b.addEventListener("click", function () { showDial(i); });
+    b.addEventListener("keydown", function (e) {
+      var n = null; if (e.key === "ArrowRight") n = Math.min(DIAL.length - 1, i + 1); if (e.key === "ArrowLeft") n = Math.max(0, i - 1);
+      if (n !== null) { e.preventDefault(); showDial(n); $$("button", seg)[n].focus(); }
+    });
+    seg.appendChild(b);
+  });
+  showDial(1);
+
+  /* ---------------- 07 WATCH-OUTS ---------------- */
+  var WATCH = [
+    { g: "Unproven", sub: "Trial 1 has to settle these", items: [
+      ["Agent teams are experimental", "No resume after the session ends, the lead approves teammate plans automatically, and task status can lag.", "Keep all state in repo files; gates live outside the team. Fallback: subagents plus file handoffs.", "p-hold", "high"],
+      ["Teammate + own worktree", "Natively, a spawned agent is either a teammate or worktree-isolated, not both.", "Builders create their worktree after spawning. Trial 1 confirms hooks and relative paths survive it.", "p-hold", "high"],
+      ["Codex is a tool, not a peer", "qa and reviewer are one-shot Codex calls through the runner, without a running conversation.", "Measure in Trial 1 whether one-shot QA misses context a persistent session would catch.", "p-hold", "medium"],
+      ["GitHub API fields unverified", "The exact fields for \"merged by\" and \"approving reviewer\" that gate-check relies on haven't been confirmed.", "Verify against the GitHub API while building gate-check, before trusting it.", "p-hold", "medium"]
+    ] },
+    { g: "Bypass risks", sub: "how an agent could still cheat", items: [
+      ["Agents running as you", "If an agent shell has your own gh login, GitHub can't tell it from you and every gate collapses.", "Mandatory low-privilege bot token for agents; never your credentials in agent sessions.", "p-stop", "critical"],
+      ["Gaming tests without bypassing them", "Special-casing test inputs or adding an env-based branch passes trace-check.", "Holdout cases builders can't read, Codex review prompt that hunts for test-shaped code, mutation testing on changed code.", "p-stop", "high"],
+      ["Decisions lost in chat", "Two agents agree something in a mailbox and the spec never learns about it.", "decisions-audit.md before archive; memory-check fails without it.", "p-hold", "medium"],
+      ["Lessons that poison later sessions", "An agent turns one correction into a wrong general rule.", "Lessons start at wip with their incident; promotion to a rule needs your review.", "p-hold", "medium"]
+    ] },
+    { g: "Human factors", sub: "where your attention runs out", items: [
+      ["Approval fatigue", "A P1 change means three gate PRs plus an implementation PR. Rubber-stamped gates give false confidence.", "Log your minutes per gate. A gate with no rejections in 10 changes gets cut or merged (spec + design first).", "p-hold", "high"],
+      ["UI doesn't fit tables", "Layout, empty and error states and accessibility don't reduce to input → output rows.", "UI-state rows, mockups from ui-ux-designer, and a visual check; expect your review time to land here.", "p-hold", "medium"]
+    ] },
+    { g: "Cost and churn", sub: "what makes it expensive to run", items: [
+      ["Subscription limits", "4–5 agents at once burn Claude and Codex quota fast.", "Cap parallel builders at 2; Codex fallback is a fresh Claude subagent labelled reduced independence.", "p-hold", "medium"],
+      ["Tool churn", "Claude Code hooks, agent teams and Codex flags change monthly.", "All logic in plain Node scripts; hooks and agent definitions stay thin wrappers.", "p-idle", "low"]
+    ] }
+  ];
+  var wroot = $("#watchRoot");
+  WATCH.forEach(function (grp) {
+    var g = el("div", "watch-group");
+    var h = el("h3", null, grp.g + " "); h.appendChild(el("small", null, grp.sub)); g.appendChild(h);
+    var cards = el("div", "cards");
+    grp.items.forEach(function (it) {
+      var c = el("article", "card");
+      var top = el("div", "top"); top.appendChild(el("h4", null, it[0])); top.appendChild(el("span", "pill " + it[3], it[4])); c.appendChild(top);
+      c.appendChild(el("p", null, it[1]));
+      var f = el("p", "fix"); f.appendChild(el("b", null, "Mitigation")); f.appendChild(document.createTextNode(it[2])); c.appendChild(f);
+      cards.appendChild(c);
+    });
+    g.appendChild(cards); wroot.appendChild(g);
+  });
+})();
+</script>
+
+</body>
+</html>
