@@ -16,8 +16,11 @@ export function changeRows(root: string, id: string): SpecRow[] {
 export const changeRowIds = (root: string, id: string): string[] =>
   [...new Set(changeRows(root, id).map((r) => r.id).filter((r) => ROW_ID.test(r)))].sort();
 
-export function liveRowIds(root: string): ReadonlySet<string> {
+/** Every row in docs/specs/**.md, including rows whose ID is malformed. */
+export function liveRows(root: string): SpecRow[] {
   const files = listRepoFiles(root, 'docs/specs').filter((f) => f.endsWith('.md'));
-  const ids = files.flatMap((f) => parseRows(readRepoFile(root, f, 'utf8'), f).map((r) => r.id));
-  return new Set(ids.filter((r) => ROW_ID.test(r)).sort());
+  return files.flatMap((f) => parseRows(readRepoFile(root, f, 'utf8'), f));
 }
+
+export const liveRowIds = (root: string): ReadonlySet<string> =>
+  new Set(liveRows(root).map((r) => r.id).filter((r) => ROW_ID.test(r)).sort());

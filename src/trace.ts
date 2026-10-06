@@ -1,7 +1,7 @@
-import { assertChangeExists, readRetires } from './change.js';
+import { assertChangeExists, readRetires, ROW_ID } from './change.js';
 import { checkGate } from './gate-check.js';
 import type { TestCase } from './junit.js';
-import { changeRowIds, liveRowIds } from './spec-index.js';
+import { changeRowIds, changeRows, liveRowIds, liveRows } from './spec-index.js';
 
 export type RowOutcome = 'passes' | 'fails' | 'not-run';
 
@@ -33,5 +33,8 @@ export function traceCheck(root: string, id: string, cases: readonly TestCase[])
   assertChangeExists(root, id);
   const tests = checkGate(root, id, 'tests');
   if (tests.status !== 'valid') return [`tests gate is ${tests.status}; retirements and rows are not approved`];
-  return traceImplementation(requiredRows(root, id), cases).problems;
+  const malformed = [...liveRows(root), ...changeRows(root, id)]
+    .filter((r) => !ROW_ID.test(r.id))
+    .map((r) => `Malformed row ID "${r.id}" in ${r.file}:${r.line}`);
+  return [...malformed, ...traceImplementation(requiredRows(root, id), cases).problems];
 }

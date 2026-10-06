@@ -5,10 +5,11 @@ export interface SpecRow {
   readonly line: number;
 }
 
+// GFM: leading and trailing pipes are optional; a line without any pipe is not a table row.
 const splitRow = (line: string): string[] | null => {
   const t = line.trim();
-  if (t.length < 2 || !t.startsWith('|') || !t.endsWith('|')) return null;
-  return t.slice(1, -1).split('|').map((c) => c.trim());
+  if (!t.includes('|')) return null;
+  return t.replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
 };
 
 const isSeparator = (cells: string[] | null): boolean =>

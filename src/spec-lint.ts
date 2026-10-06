@@ -1,4 +1,4 @@
-import { ROW_ID } from './change.js';
+import { readChange, ROW_ID } from './change.js';
 import { changeRepoDir } from './paths.js';
 import type { SpecRow } from './rows.js';
 import { lstatInRepo } from './safe-fs.js';
@@ -37,9 +37,20 @@ function collisionIssues(root: string, id: string, rows: readonly SpecRow[]): Is
     .flatMap((r) => others.filter((c) => changeRowIds(root, c).includes(r.id)).map((c) => issue(r, `New row ${r.id} is also introduced by open change ${c}`)));
 }
 
+const declaresNoBehaviourChange = (root: string, id: string): boolean => {
+  try {
+    return readChange(root, id).noBehaviourChange;
+  } catch {
+    return false; // unreadable change.json: report the zero-rows issue rather than skip it
+  }
+};
+
 export function lintChange(root: string, id: string): Issue[] {
   const path = `${changeRepoDir(id)}/spec-delta.md`;
   if (lstatInRepo(root, path) === null) return [{ file: path, line: 0, message: 'spec-delta.md is missing' }];
   const rows = changeRows(root, id);
+  if (rows.length === 0 && !declaresNoBehaviourChange(root, id)) {
+    return [{ file: path, line: 0, message: 'spec-delta.md has no example rows' }];
+  }
   return [...rowIssues(rows), ...collisionIssues(root, id, rows)];
 }

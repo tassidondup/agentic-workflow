@@ -55,4 +55,13 @@ describe('lintChange', () => {
     repo.symlink('external-file.md', 'docs/changes/c1/spec-delta.md');
     expect(() => lintChange(repo.root, 'c1')).toThrow('Symlinks are not allowed: docs/changes/c1/spec-delta.md');
   });
+  it('reports a delta with no example rows unless the change declares no behaviour change (I4)', () => {
+    const msg = 'spec-delta.md has no example rows';
+    repo = makeRepo({ 'docs/changes/c1/spec-delta.md': 'Prose only.', 'docs/changes/c1/change.json': '{"level":"P1","noBehaviourChange":false}' });
+    expect(lintChange(repo.root, 'c1')).toEqual([{ file: 'docs/changes/c1/spec-delta.md', line: 0, message: msg }]);
+    repo.write('docs/changes/c1/change.json', '{oops');
+    expect(lintChange(repo.root, 'c1').map((i) => i.message)).toEqual([msg]);
+    repo.write('docs/changes/c1/change.json', '{"level":"P1","noBehaviourChange":true}');
+    expect(lintChange(repo.root, 'c1')).toEqual([]);
+  });
 });

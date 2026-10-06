@@ -64,4 +64,11 @@ describe('parseRows', () => {
     expect(parseRows('| ID | Expected |\n|-|-|\n| LST-001 | x |', 'f.md').map((r) => r.id)).toEqual(['LST-001']);
     expect(parseRows('| ID | Expected |\n|:-|--:|\n| LST-002 | y |', 'f.md').map((r) => r.id)).toEqual(['LST-002']);
   });
+  it('accepts GFM tables without leading/trailing pipes (I4)', () => {
+    expect(parseRows('ID | Expected\n---|---\nLST-001 | x', 'f.md').map((r) => r.cells)).toEqual([{ ID: 'LST-001', Expected: 'x' }]);
+    expect(parseRows('| ID | Expected |\n|---|---|\nLST-002 | y\n| LST-003 | z', 'f.md').map((r) => r.id)).toEqual(['LST-002', 'LST-003']);
+  });
+  it('ends a table at the first line without a pipe (I4)', () => {
+    expect(parseRows('ID | Expected\n---|---\nLST-001 | x\nprose\nLST-002 | y', 'f.md').map((r) => r.id)).toEqual(['LST-001']);
+  });
 });

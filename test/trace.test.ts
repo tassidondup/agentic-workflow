@@ -59,4 +59,15 @@ describe('traceCheck (I3)', () => {
     repo.write('docs/changes/c1/retires.json', '["LST-001"]');
     expect(traceCheck(repo.root, 'c1', [])).toEqual(['tests gate is changed; retirements and rows are not approved']);
   });
+  it('reports malformed row IDs in the live specs and the delta instead of dropping them (I4)', () => {
+    repo = makeRepo(changeFiles('c1', {
+      'docs/specs/a/spec.md': 'ID | x | Expected\n---|---|---\nLST-12345 | 1 | 2\n',
+      'docs/changes/c1/spec-delta.md': '| ID | x | Expected |\n|---|---|---|\n| LST-001 | 1 | 2 |\n| lst-2 | 1 | 2 |\n',
+    }));
+    approveAll(repo);
+    expect(traceCheck(repo.root, 'c1', pass)).toEqual([
+      'Malformed row ID "LST-12345" in docs/specs/a/spec.md:3',
+      'Malformed row ID "lst-2" in docs/changes/c1/spec-delta.md:4',
+    ]);
+  });
 });
