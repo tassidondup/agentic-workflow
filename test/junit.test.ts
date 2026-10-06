@@ -40,11 +40,8 @@ describe('parseJUnit (Review Focus 4)', () => {
 
   it('does not expand DOCTYPE entities (R11: processEntities disabled)', () => {
     const xml = '<!DOCTYPE x [<!ENTITY a "aaaa">]><testsuite name="s"><testcase classname="c" name="[LST-001] &a; case"/></testsuite>';
-    try {
-      const result = parseJUnit(xml);
-      expect(result[0]?.name).not.toContain('aaaa');
-    } catch (err) {
-      expect((err as Error).message).toMatch(/Invalid JUnit XML/);
-    }
+    const [only] = parseJUnit(xml);
+    expect(only?.name).toBe('[LST-001] &a; case');
+    expect(only?.rowIds).toEqual(['LST-001']);
   });
 });
