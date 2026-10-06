@@ -16,8 +16,9 @@ const abs = (dir: string, rel: string): string => join(dir, ...rel.split('/'));
 function isSymlink(path: string): boolean {
   try {
     return lstatSync(path).isSymbolicLink();
-  } catch {
-    return false;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw e;
   }
 }
 
@@ -32,7 +33,7 @@ export function coveredFiles(root: string, id: string, gate: Gate): string[] {
   namedFiles.forEach(refuseSymlink);
   const missing = REQUIRED[gate].filter((f) => !existsSync(abs(dir, f)));
   if (missing.length > 0) throw new Error(`${gate} gate for ${id} is missing: ${missing.join(', ')}`);
-  const present = [...REQUIRED[gate], ...OPTIONAL[gate].filter((f) => existsSync(abs(dir, f)))].map((f) => abs(dir, f));
+  const present = namedFiles.filter((f) => existsSync(f));
   const inFolders = FOLDERS[gate].flatMap((f) => listFiles(abs(dir, f)));
   return [...new Set([...present, ...inFolders].map((a) => toRepoPath(root, a)))].sort();
 }
