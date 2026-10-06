@@ -68,6 +68,12 @@ describe('runBaseline', () => {
     expect(git(repo.root, 'worktree', 'list').trim().split('\n')).toHaveLength(1);
   });
 
+  it('ignores a JUnit report written by the setup command', () => {
+    const writeReport = "require('fs').mkdirSync('reports',{recursive:true});require('fs').writeFileSync('reports/junit.xml','<testsuite name=\"s\"><testcase classname=\"c\" name=\"[LST-002] x\"><failure/></testcase></testsuite>')";
+    setup({ setup: ['node', '-e', writeReport], command: ['node', '-e', '0'] });
+    expect(() => runBaseline(repo.root, 'c1')).toThrow(/did not write reports\/junit\.xml/);
+  });
+
   it('fails when the setup command fails', () => {
     setup({ setup: ['node', '-e', 'process.exit(3)'] });
     expect(() => runBaseline(repo.root, 'c1')).toThrow(/Setup command failed/);
