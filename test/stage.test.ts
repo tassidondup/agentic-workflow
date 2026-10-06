@@ -96,10 +96,19 @@ describe('staging', () => {
     expect(() => stageCheck(repo.root, 'c1')).toThrow(/spec-delta\.md is missing/);
   });
 
-  it('stageCheck requires a valid gate for every gate with staged files (I3)', () => {
+  it('stageCheck fails when all staging is deleted after approval', () => {
+    repo = makeRepo(changeFiles());
+    approveAll(repo);
+    promote(repo.root, 'c1', 'tests');
+    rmSync(join(repo.root, C, 'tests', 'stage'), { recursive: true });
+    repo.write('tests/acceptance/a.test.ts', 'loosened');
+    expect(stageCheck(repo.root, 'c1')).toEqual(['tests gate is changed']);
+  });
+
+  it('stageCheck requires the design and tests gates to be valid (I3)', () => {
     repo = makeRepo(changeFiles());
     promote(repo.root, 'c1', 'tests');
-    expect(stageCheck(repo.root, 'c1')).toEqual(['tests gate is missing']);
+    expect(stageCheck(repo.root, 'c1')).toEqual(['design gate is missing', 'tests gate is missing']);
     approveAll(repo);
     expect(stageCheck(repo.root, 'c1')).toEqual([]);
     repo.write(`${C}/tests/stage/tests/acceptance/a.test.ts`, 'loosened');
