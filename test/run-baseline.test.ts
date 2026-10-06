@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { realExec, type Exec } from '../src/exec.js';
 import { runBaseline } from '../src/run-baseline.js';
 import { git, makeRepo, type TestRepo } from './helpers/repo.js';
@@ -57,14 +56,17 @@ describe('runBaseline', () => {
 
   it('removes the temp dir when git worktree add fails (fix round 1, Important)', () => {
     setup();
-    const before = readdirSync(tmpdir()).filter((f) => f.startsWith('wf-baseline-'));
-    const exec: Exec = (cmd, args, cwd) =>
-      cmd === 'git' && args[0] === 'worktree' && args[1] === 'add'
-        ? { status: 1, stdout: '', stderr: 'boom' }
-        : realExec(cmd, args, cwd);
+    let worktreePath: string | undefined;
+    const exec: Exec = (cmd, args, cwd) => {
+      if (cmd === 'git' && args[0] === 'worktree' && args[1] === 'add') {
+        worktreePath = args[3];
+        return { status: 1, stdout: '', stderr: 'boom' };
+      }
+      return realExec(cmd, args, cwd);
+    };
     expect(() => runBaseline(repo.root, 'c1', exec)).toThrow(/git worktree add failed/);
-    const after = readdirSync(tmpdir()).filter((f) => f.startsWith('wf-baseline-'));
-    expect(after).toEqual(before);
+    expect(worktreePath).toBeDefined();
+    expect(existsSync(dirname(worktreePath as string))).toBe(false);
   });
 
   it('falls back to worktree prune when removal fails, but still returns the result (R12)', () => {
