@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 </head>
 <body>
-<title>Agentic Workflow v2.2</title>
+<title>Agentic Workflow v2.3</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -288,7 +288,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-si
 
 <header class="topbar">
   <div class="wrap">
-    <div class="brand">AGENTIC WORKFLOW <span>v2.2</span></div>
+    <div class="brand">AGENTIC WORKFLOW <span>v2.3</span></div>
     <nav class="nav" aria-label="Sections">
       <a href="#architecture">Architecture</a>
       <a href="#lifecycle">Lifecycle</a>
@@ -304,7 +304,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-si
 <main class="wrap">
   <section class="hero">
     <div>
-      <p class="eyebrow">How the workflow is built · design v2.2</p>
+      <p class="eyebrow">How the workflow is built · design v2.3</p>
       <h1 style="margin-top:14px">Specs in. Proven, reviewed code out.</h1>
       <p class="lede">You write the specs and scenarios. An orchestrator runs a team of Claude roles, and Codex writes the tests and reviews the work. <strong>Every approval is bound to your account and to the exact bytes you approved</strong>, so no agent can fake one, including the orchestrator.</p>
       <div class="legend" aria-label="Colour legend">
@@ -527,7 +527,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-si
             <g class="cn k-file" id="cAudit"><rect class="fstate" x="540" y="48" width="180" height="44" rx="8"/><text class="nm" x="630" y="67">decisions-audit.md</text><text class="sb" id="cAuditSub" x="630" y="83">1 decision recorded</text></g>
             <g class="cn k-claude"><rect x="60" y="228" width="140" height="44" rx="8"/><text class="nm" x="130" y="247">frontend-dev</text><text class="sb" x="130" y="263">apps/web/**</text></g>
             <g class="cn k-claude"><rect x="300" y="228" width="140" height="44" rx="8"/><text class="nm" x="370" y="247">backend-dev</text><text class="sb" x="370" y="263">apps/api/**</text></g>
-            <g class="cn k-file" id="cFile"><rect class="fstate" x="530" y="228" width="200" height="44" rx="8"/><text class="nm" x="630" y="247">design/openapi.diff.yaml</text><text class="sb" id="cFileSub" x="630" y="263">design gate: re-approved</text></g>
+            <g class="cn k-file" id="cFile"><rect class="fstate" x="530" y="228" width="200" height="44" rx="8"/><text class="nm" x="630" y="247">staged openapi.yaml</text><text class="sb" id="cFileSub" x="630" y="263">design gate: re-approved</text></g>
             <g id="bubble" style="opacity:0"><rect x="-80" y="-14" width="160" height="28" rx="14"/><text x="0" y="4">message</text></g>
           </svg>
         </div>
@@ -564,7 +564,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-si
   </section>
 
   <footer>
-    <span>Source: <code>docs/specs/2026-09-29-agentic-workflow-design.md</code> (v2.2). Example data in the demos is illustrative.</span>
+    <span>Source: <code>docs/specs/2026-09-29-agentic-workflow-design.md</code> (v2.3). Example data in the demos is illustrative.</span>
     <span>Built 2026-10-05</span>
   </footer>
 </main>
@@ -599,7 +599,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-si
       cant: "Stay alive after the design gate. Spawned for the design stage, then ends." },
     be: { title: "backend-dev", tags: [["claude", "Claude · mid tier"], ["claude", "per change · own worktree"]],
       body: "Builds the API against the approved contract, test-first, in its own git worktree and branch.",
-      list: ["Owns apps/api/** and the contract implementation", "Runs the staged tests locally with wf test-staged <id>", "Stuck 3 times → Codex rescue → orchestrator → you"],
+      list: ["Owns apps/api/** and the contract implementation", "Promotes the staged tests into its worktree with wf promote <id> tests", "Stuck 3 times → Codex rescue → orchestrator → you"],
       cant: "Write outside its owned paths (a hook blocks it), or edit a staged test (CI byte-identity check fails)." },
     fe: { title: "frontend-dev", tags: [["claude", "Claude · mid tier"], ["claude", "per change · own worktree"]],
       body: "Builds the web app against the same approved contract, in parallel with backend-dev.",
@@ -733,17 +733,17 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-si
       watch: "Approval fatigue. If you never reject anything here across 10 changes, the gate is theatre: cut or merge it." },
     { n: "3", short: "DESIGN", name: "Design", badge: ["you", "design gate"],
       who: [["claude", "db-designer"], ["claude", "ui-ux-designer"], ["claude", "backend-dev"], ["codex", "Codex (P3+)"]],
-      out: ["design/openapi.diff.yaml", "design/migration.sql (draft)", "mockups, ADR drafts", "task split with owned paths"],
+      out: ["design/stage/: whole files mirroring live paths (contract, migration draft)", "design/design.md", "mockups, ADR drafts", "task split with owned paths"],
       gate: "DESIGN GATE PR: record covers design/ and requires the current spec record.",
       watch: "The contract is fixed here, before tests and builds. That's what lets backend and frontend build in parallel without mismatched interfaces." },
     { n: "4", short: "TESTS", name: "Tests", badge: ["you", "tests gate"],
       who: [["codex", "qa → Codex"], ["enf", "CI baseline run"], ["you", "you approve"]],
-      out: ["docs/changes/<id>/tests/ (staged, not live)", "baseline.json: fails / passes per row", "approvals/tests.json"],
+      out: ["docs/changes/<id>/tests/stage/ (mirrors live paths, not live)", "baseline.json: fails / passes per row", "approvals/tests.json"],
       gate: "TESTS GATE PR: record covers staged tests + baseline and requires the spec and design records.",
       watch: "A row the delta calls new but which already passes is flagged: either the test is weak or the behaviour exists. You decide." },
     { n: "5", short: "BUILD", name: "Build", badge: null,
       who: [["claude", "backend-dev"], ["claude", "frontend-dev"]],
-      out: ["code + unit tests in separate worktrees", "wf test-staged <id> runs locally"],
+      out: ["code + unit tests in separate worktrees", "wf promote <id> tests in each worktree"],
       gate: "No human gate. Hooks: owned paths, verify --fast, gate check before any build task starts.",
       watch: "Stuck 3 times → Codex rescue → orchestrator → you. A wrong locked test → written test dispute → new tests gate. Missing capability → PARTIAL + follow-on change." },
     { n: "6", short: "INTEGRATE", name: "Integrate", badge: null,
@@ -808,9 +808,9 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-si
   var ORDER = ["spec", "design", "tests"];
   var REQ = { spec: [], design: ["spec"], tests: ["spec", "design"] };
   var COVERS = {
-    spec: ["proposal.md", "spec-delta.md"],
-    design: ["design/openapi.diff.yaml", "design/migration.sql", "design/design.md"],
-    tests: ["tests/** (staged)", "baseline.json"]
+    spec: ["proposal.md", "spec-delta.md", "change.json"],
+    design: ["design/design.md", "design/stage/** (contract, migration)", "design/** (mockups, ADR drafts)"],
+    tests: ["tests/stage/** (staged)", "baseline.json", "retires.json (if any)"]
   };
   function hex() { var s = ""; for (var i = 0; i < 8; i++) s += "0123456789abcdef"[Math.floor(Math.random() * 16)]; return s; }
   var G;
@@ -895,7 +895,7 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-si
         log("gate-check: spec files sha256 " + G.spec.own + "… ≠ approved " + G.spec.appr + "…", "bad");
         log("  → spec INVALID → design and tests invalid transitively", "bad");
       } else if (a === "editDesign") {
-        G.design.own = hex(); log("$ edit design/openapi.diff.yaml   (after approval)", "cmd");
+        G.design.own = hex(); log("$ edit design/stage/packages/contracts/openapi.yaml   (after approval)", "cmd");
         log("gate-check: design files sha256 " + G.design.own + "… ≠ approved " + G.design.appr + "…", "bad");
         log("  → design INVALID → tests invalid → implementation PR blocked", "bad");
       } else if (a === "bot") {
