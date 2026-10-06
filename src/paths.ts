@@ -2,8 +2,10 @@ import { isAbsolute, join, posix, relative, sep } from 'node:path';
 
 const CHANGE_ID = /^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$/;
 
+export const isChangeId = (id: string): boolean => CHANGE_ID.test(id);
+
 export function assertChangeId(id: string): string {
-  if (!CHANGE_ID.test(id)) {
+  if (!isChangeId(id)) {
     throw new Error(`Invalid change id "${id}". Use lowercase letters, digits and dashes (2-64 chars).`);
   }
   return id;

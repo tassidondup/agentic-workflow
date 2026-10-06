@@ -64,4 +64,11 @@ describe('lintChange', () => {
     repo.write('docs/changes/c1/change.json', '{"level":"P1","noBehaviourChange":true}');
     expect(lintChange(repo.root, 'c1')).toEqual([]);
   });
+  it('skips folders that are not valid change ids in the collision scan (M1)', () => {
+    repo = makeRepo({
+      'docs/changes/c1/spec-delta.md': table(['| LST-005 | 0 | 422 |']),
+      'docs/changes/BAD_ID/spec-delta.md': table(['| LST-005 | 9 | 201 |']),
+    });
+    expect(lintChange(repo.root, 'c1')).toEqual([]);
+  });
 });

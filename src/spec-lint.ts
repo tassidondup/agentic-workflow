@@ -1,5 +1,5 @@
 import { readChange, ROW_ID } from './change.js';
-import { changeRepoDir } from './paths.js';
+import { changeRepoDir, isChangeId } from './paths.js';
 import type { SpecRow } from './rows.js';
 import { lstatInRepo } from './safe-fs.js';
 import { changeRowIds, changeRows, liveRowIds, openChangeIds } from './spec-index.js';
@@ -31,7 +31,8 @@ function rowIssues(rows: readonly SpecRow[]): Issue[] {
 
 function collisionIssues(root: string, id: string, rows: readonly SpecRow[]): Issue[] {
   const live = liveRowIds(root);
-  const others = openChangeIds(root).filter((c) => c !== id);
+  // Folders that are not valid change ids are reported by memory-check, not linted here (M1).
+  const others = openChangeIds(root).filter((c) => c !== id && isChangeId(c));
   return rows
     .filter((r) => ROW_ID.test(r.id) && !live.has(r.id))
     .flatMap((r) => others.filter((c) => changeRowIds(root, c).includes(r.id)).map((c) => issue(r, `New row ${r.id} is also introduced by open change ${c}`)));
