@@ -182,7 +182,7 @@ Merging lands the code and its tests together. Main never holds a test without i
 - **Staging mirrors live paths.** `docs/changes/<id>/design/stage/<live path>` and `docs/changes/<id>/tests/stage/<live path>`. For example, `design/stage/packages/contracts/openapi.yaml` stages `packages/contracts/openapi.yaml`. Staging holds whole files, never diffs.
 - **`wf promote <id> <design|tests>`** copies staging into live paths. Builders use it at the start of BUILD; the implementation PR's byte-identity check compares live files with staging.
 - **`retires.json`** (covered by the tests gate): a JSON array of row IDs this change retires. Optional; absent means none.
-- **Rows:** example tables are markdown tables whose first header cell is `ID` and which include an `Expected` column. Row IDs match `^[A-Z][A-Z0-9]{1,9}-\d{1,4}$`. Pipes inside cells aren't supported in v1.
+- **Rows:** example tables are markdown tables whose first header cell is `ID` and which include an `Expected` column. Row IDs match `^[A-Z][A-Z0-9]{1,9}-\d{1,4}$`. Write a literal pipe inside a cell as `\|`.
 - **Tests carry row tags:** each acceptance test name contains `[ROW-ID]`. The project's test command must write a JUnit XML report (`workflow.config.json → test.junitReport`).
 - **trace-check scope:** every live row (in `docs/specs/**`) plus every row in the change's delta, minus rows in `retires.json`, must have an executed, passing test.
 - **v1 limit:** trace-check counts any executed test tagged with a row ID, wherever it lives; protecting the acceptance runner config from filtering relies on protected paths/CODEOWNERS (Plan 2).

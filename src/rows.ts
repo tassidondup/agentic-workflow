@@ -5,11 +5,13 @@ export interface SpecRow {
   readonly line: number;
 }
 
-// GFM: leading and trailing pipes are optional; a line without any pipe is not a table row.
+// GFM: leading and trailing pipes are optional; a line without any unescaped pipe is not a
+// table row; `\|` is a literal pipe inside a cell.
+const PIPE = /(?<!\\)\|/;
 const splitRow = (line: string): string[] | null => {
   const t = line.trim();
-  if (!t.includes('|')) return null;
-  return t.replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+  if (!PIPE.test(t)) return null;
+  return t.replace(/^\|/, '').replace(/(?<!\\)\|$/, '').split(PIPE).map((c) => c.trim().replaceAll('\\|', '|'));
 };
 
 const isSeparator = (cells: string[] | null): boolean =>
@@ -21,13 +23,17 @@ interface Fence {
   readonly bare: boolean; // no info string after the marker
 }
 
-const FENCE = /^(`{3,}|~{3,})(.*)$/;
+// CommonMark: a fence may be indented at most 3 spaces (4+, or a tab, makes indented code),
+// and a backtick fence's info string may not contain a backtick (that line is inline code).
+const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 
 const getFence = (line: string): Fence | null => {
-  const m = FENCE.exec(line.trim());
+  const m = FENCE.exec(line.trimEnd());
   if (m === null) return null;
   const marker = m[1] as string;
-  return { char: marker.charAt(0), length: marker.length, bare: (m[2] ?? '').trim() === '' };
+  const info = m[2] ?? '';
+  if (marker.startsWith('`') && info.includes('`')) return null;
+  return { char: marker.charAt(0), length: marker.length, bare: info.trim() === '' };
 };
 
 // CommonMark: a closing fence uses the opening char, is at least as long, and has no info string (M5).

@@ -95,4 +95,20 @@ describe('parseRows', () => {
     const md = ['```', '```js', '| ID | Expected |', '|---|---|', '| LST-001 | hidden |', '```'].join('\n');
     expect(parseRows(md, 'f.md')).toEqual([]);
   });
+  const table = ['| ID | Expected |', '|---|---|', '| LST-001 | shown |'];
+  it('does not treat a backtick line with backticks after it as a fence (it is inline code)', () => {
+    expect(parseRows(['```x``` text', ...table].join('\n'), 'f.md').map((r) => r.id)).toEqual(['LST-001']);
+  });
+  it('does not treat a fence indented 4+ spaces or a tab as a fence (it is indented code)', () => {
+    expect(parseRows(['    ```', ...table, '    ```'].join('\n'), 'f.md').map((r) => r.id)).toEqual(['LST-001']);
+    expect(parseRows(['\t~~~', ...table].join('\n'), 'f.md').map((r) => r.id)).toEqual(['LST-001']);
+  });
+  it('accepts a fence indented up to 3 spaces, and only closes on one indented up to 3', () => {
+    expect(parseRows(['   ```', ...table, '   ```'].join('\n'), 'f.md')).toEqual([]);
+    expect(parseRows(['```', '    ```', ...table, '```'].join('\n'), 'f.md')).toEqual([]);
+  });
+  it('reads an escaped pipe as part of a cell', () => {
+    const md = ['| ID | Input | Expected |', '|---|---|---|', '| LST-001 | a \\| b | 422 |'].join('\n');
+    expect(parseRows(md, 'f.md')[0]?.cells).toEqual({ ID: 'LST-001', Input: 'a | b', Expected: '422' });
+  });
 });
