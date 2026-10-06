@@ -71,4 +71,28 @@ describe('parseRows', () => {
   it('ends a table at the first line without a pipe (I4)', () => {
     expect(parseRows('ID | Expected\n---|---\nLST-001 | x\nprose\nLST-002 | y', 'f.md').map((r) => r.id)).toEqual(['LST-001']);
   });
+  it('closes a fence only with the same char and at least the opening length (M5)', () => {
+    const md = [
+      '````md',
+      '```',
+      '| ID | Expected |',
+      '|---|---|',
+      '| LST-001 | hidden |',
+      '````',
+      '| ID | Expected |',
+      '|---|---|',
+      '| LST-002 | shown |',
+      '',
+      '~~~',
+      '~~~~~',
+      '| ID | Expected |',
+      '|---|---|',
+      '| LST-003 | shown |',
+    ].join('\n');
+    expect(parseRows(md, 'f.md').map((r) => r.id)).toEqual(['LST-002', 'LST-003']);
+  });
+  it('does not close a fence on a line with an info string', () => {
+    const md = ['```', '```js', '| ID | Expected |', '|---|---|', '| LST-001 | hidden |', '```'].join('\n');
+    expect(parseRows(md, 'f.md')).toEqual([]);
+  });
 });
