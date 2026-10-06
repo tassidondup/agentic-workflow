@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { computeBaseline, type Baseline } from './baseline.js';
@@ -7,7 +7,8 @@ import { loadConfig } from './config.js';
 import { realExec, type Exec } from './exec.js';
 import { canonicalJson } from './hash.js';
 import { parseJUnit } from './junit.js';
-import { changeDir, fromRepoPath, toRepoPath } from './paths.js';
+import { changeRepoDir } from './paths.js';
+import { lstatInRepo, readRepoFile, writeRepoFile } from './safe-fs.js';
 import { changeRowIds, liveRowIds } from './spec-index.js';
 import { promote } from './stage.js';
 
@@ -32,7 +33,7 @@ function cleanupWorktree(exec: Exec, root: string, wt: string, tmp: string): voi
 export function runBaseline(root: string, id: string, exec: Exec = realExec): { baseline: Baseline | null; problems: readonly string[] } {
   const config = loadConfig(root);
   const meta = readChange(root, id);
-  const testsDir = toRepoPath(root, join(changeDir(root, id), 'tests'));
+  const testsDir = `${changeRepoDir(id)}/tests`;
   if (exec('git', ['status', '--porcelain', '--', testsDir], root).stdout.trim() !== '') {
     throw new Error('Commit the staged tests before running the baseline: it runs against a clean checkout of HEAD');
   }
@@ -46,13 +47,13 @@ export function runBaseline(root: string, id: string, exec: Exec = realExec): { 
       throw new Error(`Setup command failed: ${config.test.setup.join(' ')}`);
     }
     runIn(exec, config.test.command, wt);
-    const report = fromRepoPath(wt, config.test.junitReport);
-    if (!existsSync(report)) {
+    const report = config.test.junitReport;
+    if (lstatInRepo(wt, report) === null) {
       throw new Error(`The test command did not write ${config.test.junitReport}. Configure your runner's JUnit reporter.`);
     }
-    const cases = parseJUnit(readFileSync(report, 'utf8'));
+    const cases = parseJUnit(readRepoFile(wt, report, 'utf8'));
     const outcome = computeBaseline(id, changeRowIds(root, id), liveRowIds(root), cases, meta.noBehaviourChange);
-    if (outcome.baseline) writeFileSync(join(changeDir(root, id), 'baseline.json'), canonicalJson(outcome.baseline));
+    if (outcome.baseline) writeRepoFile(root, `${changeRepoDir(id)}/baseline.json`, canonicalJson(outcome.baseline));
     return outcome;
   } finally {
     cleanupWorktree(exec, root, wt, tmp);

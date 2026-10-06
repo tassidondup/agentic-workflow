@@ -1,7 +1,7 @@
-import { join } from 'node:path';
 import { ROW_ID } from './change.js';
-import { changeDir, lstatOrNull } from './paths.js';
+import { changeRepoDir } from './paths.js';
 import type { SpecRow } from './rows.js';
+import { lstatInRepo } from './safe-fs.js';
 import { changeRowIds, changeRows, liveRowIds, openChangeIds } from './spec-index.js';
 import type { Issue } from './types.js';
 
@@ -38,9 +38,8 @@ function collisionIssues(root: string, id: string, rows: readonly SpecRow[]): Is
 }
 
 export function lintChange(root: string, id: string): Issue[] {
-  const path = join(changeDir(root, id), 'spec-delta.md');
-  const stat = lstatOrNull(path);
-  if (stat === null) return [{ file: `docs/changes/${id}/spec-delta.md`, line: 0, message: 'spec-delta.md is missing' }];
+  const path = `${changeRepoDir(id)}/spec-delta.md`;
+  if (lstatInRepo(root, path) === null) return [{ file: path, line: 0, message: 'spec-delta.md is missing' }];
   const rows = changeRows(root, id);
   return [...rowIssues(rows), ...collisionIssues(root, id, rows)];
 }

@@ -1,4 +1,3 @@
-import { lstatSync, readdirSync, type Stats } from 'node:fs';
 import { isAbsolute, join, posix, relative, sep } from 'node:path';
 
 const CHANGE_ID = /^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$/;
@@ -36,29 +35,5 @@ export function toRepoPath(root: string, absPath: string): string {
 export const changeDir = (root: string, id: string): string =>
   join(root, 'docs', 'changes', assertChangeId(id));
 
-export function lstatOrNull(path: string): Stats | null {
-  try {
-    return lstatSync(path);
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw e;
-  }
-}
-
-export function listFiles(absDir: string): string[] {
-  const stat = lstatOrNull(absDir);
-  if (!stat) return [];
-  if (stat.isSymbolicLink()) throw new Error(`Symlinks are not allowed in gated folders: ${absDir}`);
-  if (!stat.isDirectory()) throw new Error(`Expected a folder: ${absDir}`);
-  const found: string[] = [];
-  const walk = (dir: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const abs = join(dir, entry.name);
-      if (entry.isSymbolicLink()) throw new Error(`Symlinks are not allowed in gated folders: ${abs}`);
-      if (entry.isDirectory()) walk(abs);
-      else if (entry.isFile()) found.push(abs);
-    }
-  };
-  walk(absDir);
-  return found.sort();
-}
+/** Repo path of a change folder, e.g. `docs/changes/<id>`. */
+export const changeRepoDir = (id: string): string => `docs/changes/${assertChangeId(id)}`;

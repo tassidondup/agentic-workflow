@@ -1,10 +1,7 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 
 export const sha256 = (data: string | Uint8Array): string =>
   createHash('sha256').update(data).digest('hex');
-
-export const sha256File = (absPath: string): string => sha256(readFileSync(absPath));
 
 const sortKeys = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(sortKeys);

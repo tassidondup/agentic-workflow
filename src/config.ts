@@ -1,4 +1,3 @@
-import { join } from 'node:path';
 import { readJsonFile } from './change.js';
 import { isObject, isStringArray } from './guards.js';
 import { assertSafeRepoPath } from './paths.js';
@@ -47,4 +46,4 @@ export function parseConfig(raw: unknown): WorkflowConfig {
 }
 
 export const loadConfig = (root: string): WorkflowConfig =>
-  parseConfig(readJsonFile(join(root, 'workflow.config.json'), 'workflow.config.json'));
+  parseConfig(readJsonFile(root, 'workflow.config.json'));

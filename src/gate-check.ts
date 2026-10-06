@@ -1,8 +1,6 @@
-import { existsSync } from 'node:fs';
 import { coveredFiles } from './coverage.js';
-import { sha256File } from './hash.js';
-import { fromRepoPath } from './paths.js';
 import { readRecord, recordFileSha } from './record.js';
+import { hashRepoFile, lstatInRepo } from './safe-fs.js';
 import { GATES, type ApprovalRecord, type Gate, type GateResult } from './types.js';
 
 const result = (gate: Gate, status: GateResult['status'], problems: readonly string[]): GateResult =>
@@ -10,9 +8,12 @@ const result = (gate: Gate, status: GateResult['status'], problems: readonly str
 
 function ownChanges(root: string, id: string, gate: Gate, record: ApprovalRecord): string[] {
   const fromRecord = record.covered.flatMap((c) => {
-    const abs = fromRepoPath(root, c.path);
-    if (!existsSync(abs)) return [`${c.path} was deleted`];
-    return sha256File(abs) === c.sha256 ? [] : [`${c.path} changed`];
+    try {
+      if (lstatInRepo(root, c.path) === null) return [`${c.path} was deleted`];
+      return hashRepoFile(root, c.path) === c.sha256 ? [] : [`${c.path} changed`];
+    } catch (e) {
+      return [(e as Error).message];
+    }
   });
   let current: string[];
   try {

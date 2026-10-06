@@ -1,6 +1,5 @@
-import { existsSync, lstatSync } from 'node:fs';
-import { join } from 'node:path';
-import { changeDir, listFiles, toRepoPath } from './paths.js';
+import { changeRepoDir } from './paths.js';
+import { listRepoFiles, lstatInRepo } from './safe-fs.js';
 import type { Gate } from './types.js';
 
 const REQUIRED: Readonly<Record<Gate, readonly string[]>> = {
@@ -11,29 +10,20 @@ const REQUIRED: Readonly<Record<Gate, readonly string[]>> = {
 const OPTIONAL: Readonly<Record<Gate, readonly string[]>> = { spec: [], design: [], tests: ['retires.json'] };
 const FOLDERS: Readonly<Record<Gate, readonly string[]>> = { spec: [], design: ['design'], tests: ['tests'] };
 
-const abs = (dir: string, rel: string): string => join(dir, ...rel.split('/'));
-
-function isSymlink(path: string): boolean {
-  try {
-    return lstatSync(path).isSymbolicLink();
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return false;
-    throw e;
-  }
+/** True if a named file exists as a regular file; throws on symlinks and special files. */
+function present(root: string, repoPath: string): boolean {
+  const stat = lstatInRepo(root, repoPath);
+  if (stat === null) return false;
+  if (!stat.isFile()) throw new Error(`Not a regular file: ${repoPath}`);
+  return true;
 }
 
-function refuseSymlink(path: string): void {
-  if (isSymlink(path)) throw new Error(`Symlinks are not allowed in gated folders: ${path}`);
-}
-
+/** Repo paths of every file the gate covers, sorted. */
 export function coveredFiles(root: string, id: string, gate: Gate): string[] {
-  const dir = changeDir(root, id);
-  refuseSymlink(dir);
-  const namedFiles = [...REQUIRED[gate], ...OPTIONAL[gate]].map((f) => abs(dir, f));
-  namedFiles.forEach(refuseSymlink);
-  const missing = REQUIRED[gate].filter((f) => !existsSync(abs(dir, f)));
+  const dir = changeRepoDir(id);
+  const named = [...REQUIRED[gate], ...OPTIONAL[gate]].filter((f) => present(root, `${dir}/${f}`));
+  const missing = REQUIRED[gate].filter((f) => !named.includes(f));
   if (missing.length > 0) throw new Error(`${gate} gate for ${id} is missing: ${missing.join(', ')}`);
-  const present = namedFiles.filter((f) => existsSync(f));
-  const inFolders = FOLDERS[gate].flatMap((f) => listFiles(abs(dir, f)));
-  return [...new Set([...present, ...inFolders].map((a) => toRepoPath(root, a)))].sort();
+  const inFolders = FOLDERS[gate].flatMap((f) => listRepoFiles(root, `${dir}/${f}`));
+  return [...new Set([...named.map((f) => `${dir}/${f}`), ...inFolders])].sort();
 }

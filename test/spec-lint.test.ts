@@ -53,6 +53,6 @@ describe('lintChange', () => {
   it('throws when spec-delta.md is a symlink', () => {
     repo = makeRepo();
     repo.symlink('external-file.md', 'docs/changes/c1/spec-delta.md');
-    expect(() => lintChange(repo.root, 'c1')).toThrow(/spec-delta\.md: symlinks are not allowed/);
+    expect(() => lintChange(repo.root, 'c1')).toThrow('Symlinks are not allowed: docs/changes/c1/spec-delta.md');
   });
 });

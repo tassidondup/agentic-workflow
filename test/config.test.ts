@@ -50,7 +50,7 @@ describe('loadConfig', () => {
     const tmpFile = join(repo.root, 'config-target.json');
     writeFileSync(tmpFile, '{"approvers":["user"],"test":{"command":["npm"],"junitReport":"reports/junit.xml"}}');
     symlinkSync(tmpFile, join(repo.root, 'workflow.config.json'));
-    expect(() => loadConfig(repo.root)).toThrow(/workflow\.config\.json: symlinks are not allowed/);
+    expect(() => loadConfig(repo.root)).toThrow(/Symlinks are not allowed: workflow\.config\.json/);
   });
 });
 
@@ -83,18 +83,18 @@ describe('readChange and readRetires', () => {
     const tmpFile = join(repo.root, 'change-target.json');
     writeFileSync(tmpFile, '{"level":"P0","noBehaviourChange":true}');
     symlinkSync(tmpFile, join(repo.root, 'docs/changes/c1/change.json'));
-    expect(() => readChange(repo.root, 'c1')).toThrow(/change\.json: symlinks are not allowed/);
+    expect(() => readChange(repo.root, 'c1')).toThrow(/Symlinks are not allowed: docs\/changes\/c1\/change\.json/);
   });
   it('rejects a symlinked retires.json (existing target)', () => {
     repo = makeRepo({ 'docs/changes/c1/.gitkeep': '' });
     const tmpFile = join(repo.root, 'retires-target.json');
     writeFileSync(tmpFile, '["LST-001"]');
     symlinkSync(tmpFile, join(repo.root, 'docs/changes/c1/retires.json'));
-    expect(() => readRetires(repo.root, 'c1')).toThrow(/retires\.json: symlinks are not allowed/);
+    expect(() => readRetires(repo.root, 'c1')).toThrow(/Symlinks are not allowed: docs\/changes\/c1\/retires\.json/);
   });
   it('rejects a symlinked retires.json (dangling symlink)', () => {
     repo = makeRepo({ 'docs/changes/c1/.gitkeep': '' });
     symlinkSync('/nonexistent/file.json', join(repo.root, 'docs/changes/c1/retires.json'));
-    expect(() => readRetires(repo.root, 'c1')).toThrow(/retires\.json: symlinks are not allowed/);
+    expect(() => readRetires(repo.root, 'c1')).toThrow(/Symlinks are not allowed: docs\/changes\/c1\/retires\.json/);
   });
 });

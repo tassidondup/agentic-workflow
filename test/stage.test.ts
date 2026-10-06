@@ -55,7 +55,7 @@ describe('staging', () => {
     const outside = mkdtempSync(join(tmpdir(), 'wf-outside-'));
     repo = makeRepo({ [`${C}/tests/stage/tests/a.test.ts`]: 't' });
     symlinkSync(outside, join(repo.root, 'tests'));
-    expect(() => promote(repo.root, 'c1', 'tests')).toThrow(/Refusing to write through a symlink/);
+    expect(() => promote(repo.root, 'c1', 'tests')).toThrow(/Symlinks are not allowed: tests/);
     expect(readdirSync(outside)).toEqual([]);
     rmSync(outside, { recursive: true, force: true });
   });
@@ -67,7 +67,7 @@ describe('staging', () => {
     repo = makeRepo({ [`${C}/tests/stage/tests/a.test.ts`]: 'malicious' });
     mkdirSync(join(repo.root, 'tests'), { recursive: true });
     symlinkSync(outsideFile, join(repo.root, 'tests', 'a.test.ts'));
-    expect(() => promote(repo.root, 'c1', 'tests')).toThrow(/Refusing to write through a symlink/);
+    expect(() => promote(repo.root, 'c1', 'tests')).toThrow(/Symlinks are not allowed: tests/);
     expect(readFileSync(outsideFile, 'utf8')).toBe('original');
     rmSync(outsideDir, { recursive: true, force: true });
   });
@@ -76,6 +76,6 @@ describe('staging', () => {
     repo = makeRepo({ [`${C}/tests/stage/tests/a.test.ts`]: 'same bytes' });
     mkdirSync(join(repo.root, 'tests'), { recursive: true });
     symlinkSync(join(repo.root, C, 'tests', 'stage', 'tests', 'a.test.ts'), join(repo.root, 'tests', 'a.test.ts'));
-    expect(() => checkStage(repo.root, 'c1', 'tests')).toThrow(/Refusing to write through a symlink/);
+    expect(() => checkStage(repo.root, 'c1', 'tests')).toThrow(/Symlinks are not allowed: tests/);
   });
 });

@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { approve } from './approve.js';
@@ -6,8 +5,9 @@ import type { Exec } from './exec.js';
 import { checkAll, checkGate } from './gate-check.js';
 import { parseJUnit } from './junit.js';
 import { memoryCheck } from './memory-check.js';
-import { assertChangeId, fromRepoPath, toRepoPath } from './paths.js';
+import { assertChangeId, toRepoPath } from './paths.js';
 import { runBaseline } from './run-baseline.js';
+import { readRepoFile } from './safe-fs.js';
 import { lintChange } from './spec-lint.js';
 import { checkStage, promote } from './stage.js';
 import { requiredRows, traceImplementation } from './trace.js';
@@ -100,7 +100,7 @@ function dispatch(cmd: string | undefined, pos: readonly string[], root: string,
     case 'trace-check': {
       if (!report) throw new UsageError('trace-check needs --report <path to JUnit XML>');
       const id = needId(pos[0]);
-      const cases = parseJUnit(readFileSync(fromRepoPath(root, report), 'utf8'));
+      const cases = parseJUnit(readRepoFile(root, report, 'utf8'));
       return showProblems(io, traceImplementation(requiredRows(root, id), cases).problems);
     }
     case 'spec-lint':

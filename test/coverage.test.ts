@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { coveredFiles } from '../src/coverage.js';
-import { makeRepo, type TestRepo } from './helpers/repo.js';
+import { makeRepo, mkfifo, type TestRepo } from './helpers/repo.js';
 
 let repo: TestRepo;
 afterEach(() => repo?.cleanup());
@@ -64,5 +64,24 @@ describe('coveredFiles', () => {
     mkdirSync(join(repo.root, 'docs', 'changes'), { recursive: true });
     symlinkSync(join(repo.root, 'real-change'), join(repo.root, 'docs', 'changes', 'c1'));
     expect(() => coveredFiles(repo.root, 'c1', 'spec')).toThrow(/Symlinks are not allowed/);
+  });
+
+  it('refuses a FIFO in a gated folder', () => {
+    repo = makeRepo({ [`${C}/design/design.md`]: 'd' });
+    mkfifo(join(repo.root, C, 'design', 'pipe'));
+    expect(() => coveredFiles(repo.root, 'c1', 'design')).toThrow(`Not a regular file: ${C}/design/pipe`);
+  });
+
+  it('refuses a named file that is a FIFO', () => {
+    repo = makeRepo({ [`${C}/proposal.md`]: 'p', [`${C}/spec-delta.md`]: 's' });
+    mkfifo(join(repo.root, C, 'change.json'));
+    expect(() => coveredFiles(repo.root, 'c1', 'spec')).toThrow(`Not a regular file: ${C}/change.json`);
+  });
+
+  it('refuses when docs/changes itself is a symlink', () => {
+    repo = makeRepo({ 'real/c1/proposal.md': 'p', 'real/c1/spec-delta.md': 's', 'real/c1/change.json': '{}' });
+    mkdirSync(join(repo.root, 'docs'));
+    symlinkSync(join(repo.root, 'real'), join(repo.root, 'docs', 'changes'));
+    expect(() => coveredFiles(repo.root, 'c1', 'spec')).toThrow('Symlinks are not allowed: docs/changes');
   });
 });

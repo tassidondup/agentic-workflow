@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { realExec, type Exec } from '../src/exec.js';
 import { runBaseline } from '../src/run-baseline.js';
@@ -96,5 +97,21 @@ describe('runBaseline', () => {
       return realExec(cmd, args, cwd);
     };
     expect(() => runBaseline(repo.root, 'c1', exec)).toThrow(/did not write reports\/junit\.xml/);
+  });
+
+  it('refuses to write baseline.json through a committed symlink and leaves the target unchanged (C1)', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'wf-outside-'));
+    const target = join(outside, 'victim.json');
+    writeFileSync(target, 'original');
+    try {
+      setup();
+      symlinkSync(target, join(repo.root, C, 'baseline.json'));
+      git(repo.root, 'add', '.');
+      git(repo.root, 'commit', '-q', '-m', 'link');
+      expect(() => runBaseline(repo.root, 'c1')).toThrow(/Symlinks are not allowed: docs\/changes\/c1\/baseline\.json/);
+      expect(readFileSync(target, 'utf8')).toBe('original');
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 });

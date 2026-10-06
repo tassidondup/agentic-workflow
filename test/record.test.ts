@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sha256, sha256File } from '../src/hash.js';
+import { sha256 } from '../src/hash.js';
 import { buildRecord, readRecord, recordFileSha, recordPath, writeRecord } from '../src/record.js';
 import { makeRepo, type TestRepo } from './helpers/repo.js';
 
@@ -30,7 +30,7 @@ describe('approval records', () => {
     expect(readRecord(repo.root, 'c1', 'spec')?.gate).toBe('spec');
     expect(recordFileSha(repo.root, 'c1', 'spec')).toBe(sha256(readFileSync(path)));
     const design = buildRecord(repo.root, 'c1', 'design');
-    expect(design.requires).toEqual([{ gate: 'spec', record_sha256: sha256File(path) }]);
+    expect(design.requires).toEqual([{ gate: 'spec', record_sha256: sha256(readFileSync(path)) }]);
   });
 
   it('refuses to build a downstream record before its upstream record exists', () => {
@@ -66,8 +66,8 @@ describe('approval records', () => {
       const recordPath_ = recordPath(repo.root, 'c1', 'spec');
       fs.unlinkSync(recordPath_);
       symlinkSync(tempFile, recordPath_);
-      expect(() => recordFileSha(repo.root, 'c1', 'spec')).toThrow(/symlinks are not allowed/);
-      expect(() => buildRecord(repo.root, 'c1', 'design')).toThrow(/symlinks are not allowed/);
+      expect(() => recordFileSha(repo.root, 'c1', 'spec')).toThrow(/Symlinks are not allowed: docs\/changes\/c1\/approvals\/spec\.json/);
+      expect(() => buildRecord(repo.root, 'c1', 'design')).toThrow(/Symlinks are not allowed: docs\/changes\/c1\/approvals\/spec\.json/);
     } finally {
       try {
         fs.unlinkSync(tempFile);

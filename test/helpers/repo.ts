@@ -35,3 +35,8 @@ export function git(root: string, ...args: string[]): string {
   if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${r.stderr}`);
   return r.stdout;
 }
+
+export function mkfifo(abs: string): void {
+  const r = spawnSync('mkfifo', [abs], { encoding: 'utf8' });
+  if (r.status !== 0) throw new Error(`mkfifo failed: ${r.stderr}`);
+}

@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { run } from '../src/cli.js';
 import { makeRepo, type TestRepo } from './helpers/repo.js';
 
@@ -81,5 +84,32 @@ describe('wf cli', () => {
     const t = cli('trace-check', 'c1', '--report', 'reports/junit.xml');
     expect(t.code).toBe(1);
     expect(t.out).toMatch(/LST-001: failing/);
+  });
+
+  it('refuses to approve when docs/changes is a symlink and writes nothing outside (C1/I1)', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'wf-outside-'));
+    try {
+      mkdirSync(join(outside, 'c1'));
+      writeFileSync(join(outside, 'c1', 'proposal.md'), 'p');
+      writeFileSync(join(outside, 'c1', 'spec-delta.md'), 's');
+      writeFileSync(join(outside, 'c1', 'change.json'), '{"level":"P1","noBehaviourChange":false}');
+      repo = makeRepo();
+      mkdirSync(join(repo.root, 'docs'));
+      symlinkSync(outside, join(repo.root, 'docs', 'changes'));
+      const a = cli('approve', 'c1', 'spec');
+      expect(a.code).toBe(2);
+      expect(a.err).toMatch(/Symlinks are not allowed: docs\/changes/);
+      expect(readdirSync(join(outside, 'c1')).sort()).toEqual(['change.json', 'proposal.md', 'spec-delta.md']);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a --report path that goes through a symlink', () => {
+    repo = makeRepo({ [`${C}/spec-delta.md`]: '| ID | x | Expected |\n|---|---|---|\n| LST-001 | 1 | 2 |' });
+    repo.symlink('/etc', 'reports');
+    const t = cli('trace-check', 'c1', '--report', 'reports/hosts');
+    expect(t.code).toBe(2);
+    expect(t.err).toMatch(/Symlinks are not allowed: reports/);
   });
 });

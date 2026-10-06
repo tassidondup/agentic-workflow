@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  assertChangeId, assertSafeRepoPath, changeDir, fromRepoPath, listFiles, toRepoPath,
+  assertChangeId, assertSafeRepoPath, changeDir, changeRepoDir, fromRepoPath, toRepoPath,
 } from '../src/paths.js';
 import { makeRepo, type TestRepo } from './helpers/repo.js';
 
@@ -42,26 +41,7 @@ describe('repo path conversion', () => {
     repo = makeRepo();
     expect(changeDir(repo.root, 'abc')).toBe(join(repo.root, 'docs', 'changes', 'abc'));
     expect(() => changeDir(repo.root, '../abc')).toThrow(/Invalid change id/);
-  });
-});
-
-describe('listFiles', () => {
-  it('lists files recursively in sorted order and returns [] for a missing folder', () => {
-    repo = makeRepo({ 'd/b.txt': 'b', 'd/a.txt': 'a', 'd/sub/c.txt': 'c' });
-    expect(listFiles(join(repo.root, 'd')).map((f) => toRepoPath(repo.root, f))).toEqual([
-      'd/a.txt', 'd/b.txt', 'd/sub/c.txt',
-    ]);
-    expect(listFiles(join(repo.root, 'missing'))).toEqual([]);
-  });
-  it('refuses a symlink inside the folder (Review Focus 1)', () => {
-    repo = makeRepo({ 'd/a.txt': 'a' });
-    symlinkSync('/etc/hosts', join(repo.root, 'd', 'link'));
-    expect(() => listFiles(join(repo.root, 'd'))).toThrow(/Symlinks are not allowed/);
-  });
-  it('refuses when the folder itself is a symlink', () => {
-    repo = makeRepo({ 'real/a.txt': 'a' });
-    mkdirSync(join(repo.root, 'x'));
-    symlinkSync(join(repo.root, 'real'), join(repo.root, 'x', 'linked'));
-    expect(() => listFiles(join(repo.root, 'x', 'linked'))).toThrow(/Symlinks are not allowed/);
+    expect(changeRepoDir('abc')).toBe('docs/changes/abc');
+    expect(() => changeRepoDir('../abc')).toThrow(/Invalid change id/);
   });
 });

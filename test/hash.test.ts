@@ -1,22 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { canonicalJson, sha256, sha256File } from '../src/hash.js';
+import { canonicalJson, sha256 } from '../src/hash.js';
 
 describe('hash', () => {
   it('computes the standard sha256 of a string', () => {
     expect(sha256('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
-  });
-
-  it('hashes file bytes, so a CRLF change produces a different hash', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'wf-hash-'));
-    const lf = join(dir, 'lf.md');
-    const crlf = join(dir, 'crlf.md');
-    writeFileSync(lf, 'a\nb\n');
-    writeFileSync(crlf, 'a\r\nb\r\n');
-    expect(sha256File(lf)).toBe(sha256('a\nb\n'));
-    expect(sha256File(lf)).not.toBe(sha256File(crlf));
   });
 
   it('writes canonical JSON with sorted keys at every depth and a trailing newline', () => {
