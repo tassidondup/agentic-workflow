@@ -2,6 +2,7 @@
   "name": "agentic-workflow",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "bin": {
     "wf": "dist/bin.js"
