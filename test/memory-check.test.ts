@@ -27,4 +27,21 @@ describe('memoryCheck', () => {
     repo = makeRepo({ ...base, 'docs/changes/c1/approvals/tests.json': '{}' });
     expect(memoryCheck(repo.root).map((i) => i.message)).toEqual(['Change c1 has approved tests but no decisions-audit.md']);
   });
+  it('reports invalid change id without crashing', () => {
+    repo = makeRepo({ ...base, 'docs/changes/BAD_ID/approvals/tests.json': '{}' });
+    expect(memoryCheck(repo.root).map((i) => i.message)).toEqual(['docs/changes/BAD_ID is not a valid change id']);
+  });
+  it('reports link pointing outside repo', () => {
+    repo = makeRepo({ ...base, 'docs/context.md': '# C\n\nAccess [etc](../../../etc/hosts).\n' });
+    expect(memoryCheck(repo.root)).toEqual([{ file: 'docs/context.md', line: 3, message: 'Link points outside the repository: ../../../etc/hosts' }]);
+  });
+  it('handles links with titles and missing links', () => {
+    repo = makeRepo({ ...base, 'docs/context.md': '# C\n\nRead [specs](specs/ "Title") and [missing](missing.md "Title").\n' });
+    const issues = memoryCheck(repo.root);
+    expect(issues.map((i) => i.message)).toEqual(['Broken link: missing.md']);
+  });
+  it('resolves percent-encoded and angle-bracket links', () => {
+    repo = makeRepo({ ...base, 'docs/a b.md': '# File', 'docs/context.md': '# C\n\nRead [percent](a%20b.md) and [angle](<a b.md>).\n' });
+    expect(memoryCheck(repo.root)).toEqual([]);
+  });
 });
