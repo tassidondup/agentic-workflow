@@ -185,6 +185,7 @@ Merging lands the code and its tests together. Main never holds a test without i
 - **Rows:** example tables are markdown tables whose first header cell is `ID` and which include an `Expected` column. Row IDs match `^[A-Z][A-Z0-9]{1,9}-\d{1,4}$`. Pipes inside cells aren't supported in v1.
 - **Tests carry row tags:** each acceptance test name contains `[ROW-ID]`. The project's test command must write a JUnit XML report (`workflow.config.json → test.junitReport`).
 - **trace-check scope:** every live row (in `docs/specs/**`) plus every row in the change's delta, minus rows in `retires.json`, must have an executed, passing test.
+- **v1 limit:** trace-check counts any executed test tagged with a row ID, wherever it lives; protecting the acceptance runner config from filtering relies on protected paths/CODEOWNERS (Plan 2).
 - **`workflow.config.json`:** `{ "approvers": ["<github-username>"], "test": { "setup": ["npm","ci"], "command": ["npx","vitest","run","--reporter=junit","--outputFile=reports/junit.xml"], "junitReport": "reports/junit.xml" } }`. `setup` is optional.
 
 ## Tests
