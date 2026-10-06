@@ -21,7 +21,7 @@ function rowIssues(rows: readonly SpecRow[]): Issue[] {
     if (exp === undefined) return [...found, issue(row, `Row ${row.id} is in a table without an Expected column`)];
     const inputs = JSON.stringify(Object.entries(row.cells).filter(([k]) => k.toLowerCase() !== 'id' && k !== exp));
     const twin = byInputs.get(inputs);
-    if (twin && twin.cells[exp] !== row.cells[exp]) {
+    if (twin && twin.cells[expectedKey(twin) ?? exp] !== row.cells[exp]) {
       found.push(issue(row, `${row.id} has the same inputs as ${twin.id} but a different Expected value`));
     }
     if (!twin) byInputs.set(inputs, row);

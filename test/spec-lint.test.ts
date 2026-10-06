@@ -34,6 +34,13 @@ describe('lintChange', () => {
     expect(messages).toContain('Row ID LST-002 appears more than once');
     expect(messages).toContain('LST-003 has the same inputs as LST-002 but a different Expected value');
   });
+  it('compares Expected across tables that spell the column differently', () => {
+    const t = (exp: string, row: string): string => `| ID | Price | ${exp} |\n|---|---|---|\n${row}\n`;
+    repo = makeRepo({ 'docs/changes/c1/spec-delta.md': `${t('Expected', '| LST-001 | 5 | 201 |')}\n${t('expected', '| LST-002 | 5 | 201 |')}` });
+    expect(lintChange(repo.root, 'c1')).toEqual([]);
+    repo.write('docs/changes/c1/spec-delta.md', `${t('Expected', '| LST-001 | 5 | 201 |')}\n${t('expected', '| LST-002 | 5 | 422 |')}`);
+    expect(lintChange(repo.root, 'c1').map((i) => i.message)).toEqual(['LST-002 has the same inputs as LST-001 but a different Expected value']);
+  });
   it('reports a table without an Expected column', () => {
     repo = makeRepo({ 'docs/changes/c1/spec-delta.md': '| ID | Price |\n|---|---|\n| LST-001 | 0 |' });
     expect(lintChange(repo.root, 'c1').map((i) => i.message)).toContain('Row LST-001 is in a table without an Expected column');
