@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { realExec, type Exec } from '../src/exec.js';
+import { baselineInputs } from '../src/baseline-file.js';
 import { runBaseline } from '../src/run-baseline.js';
 import { git, makeRepo, type TestRepo } from './helpers/repo.js';
 
@@ -31,7 +32,9 @@ describe('runBaseline', () => {
     setup();
     const r = runBaseline(repo.root, 'c1');
     expect(r.problems).toEqual([]);
-    expect(JSON.parse(readFileSync(join(repo.root, C, 'baseline.json'), 'utf8')).rows).toEqual({ 'LST-001': 'passes', 'LST-002': 'fails' });
+    const written = JSON.parse(readFileSync(join(repo.root, C, 'baseline.json'), 'utf8'));
+    expect(written.rows).toEqual({ 'LST-001': 'passes', 'LST-002': 'fails' });
+    expect(written.inputs_sha256).toBe(baselineInputs(repo.root, 'c1'));
     expect(existsSync(join(repo.root, 'tests', 'acceptance', 'rows.json'))).toBe(false);
     expect(git(repo.root, 'worktree', 'list').trim().split('\n')).toHaveLength(1);
   });
@@ -39,7 +42,7 @@ describe('runBaseline', () => {
   it('refuses when staged tests are not committed', () => {
     setup();
     repo.write(`${C}/tests/stage/tests/acceptance/extra.test.ts`, 'x');
-    expect(() => runBaseline(repo.root, 'c1')).toThrow(/Commit the staged tests/);
+    expect(() => runBaseline(repo.root, 'c1')).toThrow(/Commit docs\/changes\/c1 before running the baseline/);
   });
 
   it('errors when the test command writes no JUnit report, and cleans up (Review Focus 3)', () => {
@@ -131,5 +134,19 @@ describe('runBaseline', () => {
     git(repo.root, 'add', '.');
     git(repo.root, 'commit', '-q', '-m', 'forge');
     expect(() => runBaseline(repo.root, 'c1')).toThrow('Staging may not target the JUnit report path');
+  });
+
+  it('refuses when any file in the change folder is uncommitted (I7)', () => {
+    setup();
+    repo.write(`${C}/spec-delta.md`, `${table}| LST-003 | 5 | 422 |\n`);
+    expect(() => runBaseline(repo.root, 'c1')).toThrow(/Commit docs\/changes\/c1 before running the baseline/);
+  });
+
+  it('reads live specs from HEAD, not the working tree (I7)', () => {
+    setup();
+    repo.write('docs/specs/listing/spec.md', '# no rows in the uncommitted copy\n');
+    const r = runBaseline(repo.root, 'c1');
+    expect(r.problems).toEqual([]);
+    expect(r.baseline?.flags).toEqual([]);
   });
 });

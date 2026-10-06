@@ -1,4 +1,6 @@
 import { approve } from '../../src/approve.js';
+import { baselineInputs } from '../../src/baseline-file.js';
+import { changeRowIds } from '../../src/spec-index.js';
 import type { TestRepo } from './repo.js';
 
 const ROWS = '| ID | x | Expected |\n|---|---|---|\n| LST-001 | 1 | 2 |\n';
@@ -12,14 +14,21 @@ export function changeFiles(id = 'c1', extra: Record<string, string> = {}): Reco
     [`${c}/change.json`]: '{"level":"P1","noBehaviourChange":false}',
     [`${c}/design/design.md`]: 'd',
     [`${c}/tests/stage/tests/acceptance/a.test.ts`]: 't',
-    [`${c}/baseline.json`]: '{}',
     ...extra,
   };
 }
 
-/** Approves spec, design and tests in order. */
+/** Writes a baseline.json that matches the current inputs, with every row failing. */
+export function writeValidBaseline(repo: TestRepo, id = 'c1'): void {
+  const rows = Object.fromEntries(changeRowIds(repo.root, id).map((r) => [r, 'fails']));
+  const body = { change: id, rows, flags: [], inputs_sha256: baselineInputs(repo.root, id) };
+  repo.write(`docs/changes/${id}/baseline.json`, JSON.stringify(body));
+}
+
+/** Approves spec, design and tests in order (writing a matching baseline.json first). */
 export function approveAll(repo: TestRepo, id = 'c1'): void {
   approve(repo.root, id, 'spec');
   approve(repo.root, id, 'design');
+  writeValidBaseline(repo, id);
   approve(repo.root, id, 'tests');
 }
