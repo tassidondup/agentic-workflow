@@ -19,16 +19,24 @@ function runIn(exec: Exec, command: readonly string[], cwd: string): number {
   return exec(cmd, args, cwd).status;
 }
 
-// Removes the worktree and the temp dir. Never throws: a failure here must not replace
-// whatever error or result the main body already produced (controller ruling R12).
-function cleanupWorktree(exec: Exec, root: string, wt: string, tmp: string): void {
+const quietly = (fn: () => void): void => {
   try {
-    const removed = exec('git', ['worktree', 'remove', '--force', wt], root);
-    if (removed.status !== 0) exec('git', ['worktree', 'prune'], root);
+    fn();
   } catch {
     // Swallowed deliberately: cleanup failures must not mask the original error/result.
   }
-  rmSync(tmp, { recursive: true, force: true });
+};
+
+// Removes the worktree and the temp dir. Never throws: a failure here must not replace
+// whatever error or result the main body already produced (controller ruling R12).
+// The temp dir goes first, so a fallback `git worktree prune` sees it gone and drops the entry (M2).
+function cleanupWorktree(exec: Exec, root: string, wt: string, tmp: string): void {
+  let removed = false;
+  quietly(() => {
+    removed = exec('git', ['worktree', 'remove', '--force', wt], root).status === 0;
+  });
+  quietly(() => rmSync(tmp, { recursive: true, force: true }));
+  if (!removed) quietly(() => exec('git', ['worktree', 'prune'], root));
 }
 
 // Promotes the staged tests into the worktree and removes any committed JUnit report, so the

@@ -86,6 +86,7 @@ describe('runBaseline', () => {
     const r = runBaseline(repo.root, 'c1', exec);
     expect(r.problems).toEqual([]);
     expect(calls.some((c) => c[0] === 'git' && c[1] === 'worktree' && c[2] === 'prune')).toBe(true);
+    expect(git(repo.root, 'worktree', 'list').trim().split('\n')).toHaveLength(1);
   });
 
   it('surfaces the original error even if cleanup itself throws (R12)', () => {
