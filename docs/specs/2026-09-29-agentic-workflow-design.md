@@ -119,13 +119,13 @@ A gate counts only if **you** approved **these exact bytes**. Both halves are ch
 ```json
 { "change": "<id>", "gate": "design", "tool_version": "x.y.z",
   "requires": [ { "gate": "spec", "record_sha256": "…" } ],
-  "covered": [ { "path": "docs/changes/<id>/design/openapi.diff.yaml", "sha256": "…" },
+  "covered": [ { "path": "docs/changes/<id>/design/stage/packages/contracts/openapi.yaml", "sha256": "…" },
                { "path": "docs/changes/<id>/design/migration.sql",     "sha256": "…" } ] }
 ```
 | Gate | Covers | Bound to (`requires`) |
 |---|---|---|
 | `spec` | `proposal.md`, `spec-delta.md` | nothing |
-| `design` | everything under `docs/changes/<id>/design/` (contract diff, migration draft, mockups, `design.md`, task split) + the change's draft ADRs | `spec` record |
+| `design` | everything under `docs/changes/<id>/design/` (staged contract and migration under `stage/`, mockups, `design.md`, task split) + the change's draft ADRs | `spec` record |
 | `tests` | everything under `docs/changes/<id>/tests/` (staged tests + harness overlay) + `baseline.json` + the list of rows this change retires | `spec` and `design` records |
 
 **Authentication (who).**
