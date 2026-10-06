@@ -41,7 +41,7 @@ export function validateBaseline(root: string, id: string): void {
   const rows = isObject(raw.rows) ? raw.rows : fail('"rows" must be an object');
   const retired = readRetires(root, id);
   const expected = changeRowIds(root, id).filter((r) => !retired.has(r));
-  if (Object.keys(rows).sort().join(',') !== expected.join(',')) {
+  if (JSON.stringify(Object.keys(rows).sort()) !== JSON.stringify(expected)) {
     fail(`"rows" must list exactly the change's rows minus retired rows: [${expected.join(', ')}]`);
   }
   const values = Object.values(rows);
@@ -50,6 +50,6 @@ export function validateBaseline(root: string, id: string): void {
   const problems = behaviourProblems(values.filter((v) => v === 'fails').length, readChange(root, id).noBehaviourChange);
   if (problems.length > 0) fail((problems[0] as string).replace(/^./, (c) => c.toLowerCase()));
   if (raw.inputs_sha256 !== baselineInputs(root, id)) {
-    fail('spec-delta.md, tests/ or retires.json changed since the baseline ran (inputs_sha256 mismatch)');
+    fail('spec-delta.md, tests/ or retires.json changed since the baseline ran, or tests/ holds git-ignored files (inputs_sha256 mismatch)');
   }
 }
