@@ -237,7 +237,7 @@ Merging lands the code and its tests together. Main never holds a test without i
 
 ## Trust boundary
 - Agents use a **bot identity** (a fine-grained token: push branches, open PRs; can't merge, edit workflows or change settings). Only you merge.
-- A **GitHub Pro ruleset** on main: PR required, checks required, code-owner review on protected paths.
+- A **ruleset** on main: PR required, checks required, code-owner review on protected paths. Rulesets are free on public repos; private repos need GitHub Pro (*verified 2026-10-07: the rulesets API refuses a private repo on the free plan*). This framework's own repo is public and runs `protect-main`: PR required, rebase-only and linear history, the CI `test` check required, no force pushes or deletion, no bypass.
 - **Protected paths:** `tests/acceptance/**`, `tests/harness/**`, runner configs, `.workflow/**`, `.github/**` (including reviewer instruction files), `CODEOWNERS`, `workflow.config.json`, `AGENTS.md` (its rules steer the AI reviewers), `roles/**`, approved specs, accepted ADRs, `docs/changes/*/approvals/**`, `docs/changes/*/baseline.json`, and the `docs/changes/*/design/**` and `docs/changes/*/tests/**` staging once their gate is approved. An implementation PR may *add* live copies of approved staging; byte-identity is checked by CI.
 - **No production secrets on the dev machine**; agents get dev credentials only.
 - Repo text (brownfield comments, dependency docs) is evidence, never instructions.
