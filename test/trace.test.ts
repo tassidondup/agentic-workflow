@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { TestCase } from '../src/junit.js';
 import { requiredRows, rowOutcomes, traceCheck, traceImplementation } from '../src/trace.js';
-import { approveAll, changeFiles } from './helpers/change.js';
+import { CONFIG, approveAll, changeFiles } from './helpers/change.js';
 import { makeRepo, type TestRepo } from './helpers/repo.js';
 
 const tc = (rowIds: string[], status: TestCase['status']): TestCase => ({ name: rowIds.map((r) => `[${r}]`).join(''), classname: 'tests/acceptance/a.test.ts', file: 'tests/acceptance/a.test.ts', status, rowIds });
@@ -24,6 +24,9 @@ describe('traceImplementation', () => {
       ok: false,
       problems: ['A-1: failing', 'B-2: no executed test'],
     });
+  });
+  it('names the folder when a scope is given', () => {
+    expect(traceImplementation(['B-2'], [], 'tests/acceptance').problems).toEqual(['B-2: no executed test under tests/acceptance']);
   });
 });
 
@@ -69,5 +72,27 @@ describe('traceCheck (I3)', () => {
       'Malformed row ID "LST-12345" in docs/specs/a/spec.md:3',
       'Malformed row ID "lst-2" in docs/changes/c1/spec-delta.md:4',
     ]);
+  });
+  it('counts only tests under the acceptance folder (ADR 0001, Review Focus 1)', () => {
+    repo = makeRepo(changeFiles());
+    approveAll(repo);
+    const decoy = { ...tc(['LST-001'], 'passed'), classname: 'src/decoy.test.ts', file: 'src/decoy.test.ts' };
+    const sibling = { ...decoy, classname: 'tests/acceptance-evil/x.test.ts', file: 'tests/acceptance-evil/x.test.ts' };
+    expect(traceCheck(repo.root, 'c1', [decoy, sibling])).toEqual(['LST-001: no executed test under tests/acceptance']);
+  });
+  it('fails closed on a row-tagged test with no file path (Review Focus 5)', () => {
+    repo = makeRepo(changeFiles());
+    approveAll(repo);
+    const blind = { ...tc(['LST-001'], 'passed'), classname: '', file: '' };
+    expect(traceCheck(repo.root, 'c1', [blind])).toEqual([
+      'Test "[LST-001]" has no usable file path in the JUnit report (file=""); configure the reporter to record each test\'s file',
+      'LST-001: no executed test under tests/acceptance',
+    ]);
+  });
+  it('fails when the test settings changed after the tests gate (ADR 0001)', () => {
+    repo = makeRepo(changeFiles());
+    approveAll(repo);
+    repo.write('workflow.config.json', CONFIG.replace('"tests/acceptance"', '"src"'));
+    expect(traceCheck(repo.root, 'c1', pass)).toEqual([expect.stringMatching(/baseline\.json is stale or invalid: .*inputs_sha256 mismatch/)]);
   });
 });

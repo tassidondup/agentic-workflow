@@ -90,14 +90,14 @@ describe('wf cli', () => {
   it('trace-checks a JUnit report once the tests gate is valid (I3)', () => {
     repo = makeRepo({
       ...changeFiles(),
-      'reports/junit.xml': '<testsuite name="s"><testcase classname="c" name="[LST-001] ok"/></testsuite>',
+      'reports/junit.xml': '<testsuite name="s"><testcase classname="tests/acceptance/a.test.ts" name="[LST-001] ok"/></testsuite>',
     });
     const unapproved = cli('trace-check', 'c1', '--report', 'reports/junit.xml');
     expect(unapproved.code).toBe(1);
     expect(unapproved.out).toMatch(/tests gate is missing; retirements and rows are not approved/);
     approveAll(repo);
     expect(cli('trace-check', 'c1', '--report', 'reports/junit.xml').code).toBe(0);
-    repo.write('reports/junit.xml', '<testsuite name="s"><testcase classname="c" name="[LST-001] ok"><failure/></testcase></testsuite>');
+    repo.write('reports/junit.xml', '<testsuite name="s"><testcase classname="tests/acceptance/a.test.ts" name="[LST-001] ok"><failure/></testcase></testsuite>');
     const t = cli('trace-check', 'c1', '--report', 'reports/junit.xml');
     expect(t.code).toBe(1);
     expect(t.out).toMatch(/LST-001: failing/);
