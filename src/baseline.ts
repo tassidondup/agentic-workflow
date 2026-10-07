@@ -1,7 +1,8 @@
 import type { TestCase } from './junit.js';
+import type { Manifest } from './manifest.js';
 import { rowOutcomes } from './outcomes.js';
 
-export interface Baseline {
+export interface Baseline extends Manifest {
   readonly change: string;
   readonly rows: Readonly<Record<string, 'passes' | 'fails'>>;
   readonly flags: readonly string[];
@@ -16,6 +17,7 @@ export interface BaselineInput {
   readonly cases: readonly TestCase[];
   readonly noBehaviourChange: boolean;
   readonly inputsSha256: string;
+  readonly manifest: Manifest;
 }
 
 export const behaviourProblems = (failing: number, noBehaviourChange: boolean): string[] => {
@@ -34,5 +36,9 @@ export function computeBaseline(input: BaselineInput): { baseline: Baseline | nu
   const flags = Object.entries(rows)
     .filter(([r, o]) => o === 'passes' && !input.live.has(r))
     .map(([r]) => `${r} is new in this change but already passes on main: weak test or existing behaviour. Decide before approving.`);
-  return { baseline: Object.freeze({ change: input.id, rows, flags, inputs_sha256: input.inputsSha256 }), problems: [] };
+  const { acceptance, harness } = input.manifest;
+  return {
+    baseline: Object.freeze({ change: input.id, rows, flags, inputs_sha256: input.inputsSha256, acceptance, harness }),
+    problems: [],
+  };
 }

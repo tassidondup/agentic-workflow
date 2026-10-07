@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { approve } from '../src/approve.js';
 import { baselineInputs } from '../src/baseline-file.js';
+import { loadConfig } from '../src/config.js';
+import { buildManifest } from '../src/manifest.js';
 import { checkGate } from '../src/gate-check.js';
 import { changeFiles } from './helpers/change.js';
 import { makeRepo, type TestRepo } from './helpers/repo.js';
@@ -60,7 +62,7 @@ describe('approve tests validates baseline.json (I7)', () => {
     approve(repo.root, 'c1', 'design');
   };
   const writeBaseline = (patch: Record<string, unknown> = {}): void => {
-    const body = { change: 'c1', rows: { 'LST-001': 'fails' }, flags: [], inputs_sha256: baselineInputs(repo.root, 'c1'), ...patch };
+    const body = { change: 'c1', rows: { 'LST-001': 'fails' }, flags: [], inputs_sha256: baselineInputs(repo.root, 'c1'), ...buildManifest(repo.root, loadConfig(repo.root)), ...patch };
     repo.write(`${C}/baseline.json`, JSON.stringify(body));
   };
   const stale = /baseline\.json is stale or invalid: .*; re-run wf baseline/;
@@ -81,11 +83,19 @@ describe('approve tests validates baseline.json (I7)', () => {
     ['nothing fails', { rows: { 'LST-001': 'passes' } }, null],
     ['bad flags', { flags: [1] }, null],
     ['wrong inputs hash', { inputs_sha256: 'b'.repeat(64) }, null],
+    ['no manifest', { acceptance: undefined, harness: undefined }, null],
   ])('refuses %s', (_name, patch, raw) => {
     ready();
     if (raw === null) writeBaseline(patch ?? {});
     else repo.write(`${C}/baseline.json`, raw);
     expect(() => approve(repo.root, 'c1', 'tests')).toThrow(stale);
+    expect(checkGate(repo.root, 'c1', 'tests').status).toBe('missing');
+  });
+
+  it('refuses a baseline whose manifest was edited by hand (Review Focus 3)', () => {
+    ready({ 'tests/acceptance/old.test.ts': '// [LST-001]', 'tests/acceptance/decoy.test.ts': '// [LST-001] decoy' });
+    writeBaseline({ acceptance: [] });
+    expect(() => approve(repo.root, 'c1', 'tests')).toThrow(/files under tests\/acceptance or test\.harness changed since the baseline ran/);
     expect(checkGate(repo.root, 'c1', 'tests').status).toBe('missing');
   });
 

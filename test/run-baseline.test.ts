@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { realExec, type Exec } from '../src/exec.js';
 import { baselineInputs } from '../src/baseline-file.js';
+import { sha256 } from '../src/hash.js';
 import { runBaseline } from '../src/run-baseline.js';
 import { git, makeRepo, type TestRepo } from './helpers/repo.js';
 
@@ -170,5 +171,31 @@ describe('runBaseline', () => {
     const r = runBaseline(repo.root, 'c1');
     expect(r.problems).toEqual([]);
     expect(r.baseline?.flags).toEqual([]);
+  });
+
+  it('records the acceptance folder and harness from HEAD, before staging (ADR 0001)', () => {
+    setup({ harness: ['vitest.config.ts', 'absent.config.ts'] });
+    repo.write('tests/acceptance/old.test.ts', '// [LST-001] [LST-001] existing\n');
+    repo.write('vitest.config.ts', 'export default {};\n');
+    git(repo.root, 'add', '.');
+    git(repo.root, 'commit', '-q', '-m', 'existing acceptance test and runner config');
+    expect(runBaseline(repo.root, 'c1').problems).toEqual([]);
+    const written = JSON.parse(readFileSync(join(repo.root, C, 'baseline.json'), 'utf8'));
+    expect(written.acceptance).toEqual([
+      { path: 'tests/acceptance/old.test.ts', sha256: sha256('// [LST-001] [LST-001] existing\n'), rows: ['LST-001'] },
+    ]);
+    expect(written.harness).toEqual([
+      { path: 'vitest.config.ts', sha256: sha256('export default {};\n') },
+      { path: 'absent.config.ts', sha256: null },
+    ]);
+  });
+
+  it('ignores row-tagged tests outside the acceptance folder (ADR 0001)', () => {
+    setup();
+    repo.write('runner.config.json', '{"excludeAcceptance":true}');
+    repo.write('src/decoys.json', JSON.stringify({ rows: [{ id: 'LST-001', title: 'decoy' }, { id: 'LST-002', title: 'decoy' }] }));
+    git(repo.root, 'add', '.');
+    git(repo.root, 'commit', '-q', '-m', 'filter acceptance, add decoys');
+    expect(runBaseline(repo.root, 'c1').problems).toEqual(['LST-001: no executed test at baseline', 'LST-002: no executed test at baseline']);
   });
 });
