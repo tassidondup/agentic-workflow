@@ -1,6 +1,6 @@
-# Agentic Workflow — Design v2.3
+# Agentic Workflow — Design v2.4
 
-Supersedes `2026-09-26-agentic-framework-design.md`. v2.1 added: the agent team model, a reordered lifecycle (contract before tests), the planning dial, test-dispute and harness ownership, and memory maturity, plus ideas from claudex-loop and OpenRig. v2.2 (from Codex reviews 3–4): approvals are hash-bound to you and **chained** (design → spec, tests → spec + design), and tests are **staged and locked by hash** with an approved baseline instead of merged early. That removes the row-state machine. v2.3 (2026-10-06): automated PR review is Codex cloud review, AI approvals never count, review instructions are protected, and Copilot is rejected for now (see *Automated PR review*).
+Supersedes `2026-09-26-agentic-framework-design.md`. v2.1 added: the agent team model, a reordered lifecycle (contract before tests), the planning dial, test-dispute and harness ownership, and memory maturity, plus ideas from claudex-loop and OpenRig. v2.2 (from Codex reviews 3–4): approvals are hash-bound to you and **chained** (design → spec, tests → spec + design), and tests are **staged and locked by hash** with an approved baseline instead of merged early. That removes the row-state machine. v2.3 (2026-10-06): automated PR review is Codex cloud review, AI approvals never count, review instructions are protected, and Copilot is rejected for now (see *Automated PR review*). v2.4 (2026-10-07, ADR 0001, from dogfood run 1): rows count only from tests under `test.acceptanceDir`, and the baseline locks the whole acceptance folder plus the runner config, so a runner-config filter plus decoy tests no longer passes (see *Test staging, baseline and activation*).
 
 ## Context
 The product is the **workflow**: how memory, decisions, specs, tests and a team of agents fit together. It gets installed into any TypeScript repo, greenfield or brownfield, with `npx <tool> init`.
@@ -173,7 +173,7 @@ A gate counts only if **you** approved **these exact bytes**. Both halves are ch
 
 **1. Staging.** qa writes the tests (plus any harness changes, as an overlay) under `docs/changes/<id>/tests/`. The runner config only discovers `tests/acceptance/**`, and that config is itself a locked harness file, so staged tests never run as part of main's suite. Builders run them locally after `wf promote <id> tests` in their worktree.
 
-**2. Baseline.** On the tests gate PR, CI runs the staged tests (with the harness overlay) against current main and writes `baseline.json`: `{ rowId: "fails" | "passes" }`. You approve the tests **and** the baseline together, which handles legitimate already-passing rows:
+**2. Baseline.** On the tests gate PR, CI runs the staged tests (with the harness overlay) against current main and writes `baseline.json`: `{ rowId: "fails" | "passes" }`, plus a manifest (path + sha256) of every file under `test.acceptanceDir` and every `test.harness` path on main. You approve the tests, the baseline **and** the manifest together. The baseline handles legitimate already-passing rows:
 - `passes`: the behaviour already exists (unchanged rules, unauthenticated → 401, brownfield characterization rows). That's fine and recorded.
 - `fails`: new or changed behaviour, which the implementation must produce.
 - **At least one row must be `fails`**, or the change declares `no-behaviour-change` (a refactor), which sends it to the P0 lane. This is the targeted evidence that the change actually does something and its tests can detect it.
@@ -188,10 +188,10 @@ Merging lands the code and its tests together. Main never holds a test without i
 
 **4. Retirement (atomic with the replacement).**
 - A superseding change lists the rows it retires in its spec delta; the tests gate approval covers that list.
-- The old tests **stay live and required** until the replacement's implementation PR, which deletes them in the same merge that adds the new tests and code. trace-check only allows a live acceptance test to be deleted by the PR of a change whose approved record lists that row as retired.
+- The old tests **stay live and required** until the replacement's implementation PR, which deletes them in the same merge that adds the new tests and code. stage-check only allows a live acceptance file to be deleted by a change whose approved `retires.json` lists every row tagged in it.
 - If the replacement stalls or is abandoned, nothing was ever removed, so old coverage is preserved by construction.
 
-**5. Overlapping changes.** Staged tests don't run on main, so change B making change A's rows pass breaks nothing. A's implementation PR simply finds those rows passing, which is all it needs. If two changes stage edits to the same harness file, the later one's hash no longer matches after the first merges: rebase → new tests gate PR (re-approval). The harness overlap is serialized, not silently merged.
+**5. Overlapping changes.** Staged tests don't run on main, so change B making change A's rows pass breaks nothing. A's implementation PR simply finds those rows passing, which is all it needs. If two changes stage edits to the same harness file, the later one's hash no longer matches after the first merges: rebase → new tests gate PR (re-approval). The harness overlap is serialized, not silently merged. Because the manifest locks the whole acceptance folder and the runner config, *any* acceptance or harness file merged by another change after this change's tests gate also forces a re-run of the baseline and re-approval (ADR 0001; revisit for the team layer).
 
 **6. PARTIAL.** If a change ships only some rows, it declares `PARTIAL` in `progress/`, names each unshipped row and its follow-on change, and those rows' staged tests aren't copied live. The tests gate approval for the follow-on change covers them later.
 
@@ -203,9 +203,10 @@ Merging lands the code and its tests together. Main never holds a test without i
 - **`retires.json`** (covered by the tests gate): a JSON array of row IDs this change retires. Optional; absent means none.
 - **Rows:** example tables are markdown tables whose first header cell is `ID` and which include an `Expected` column. Row IDs match `^[A-Z][A-Z0-9]{1,9}-\d{1,4}$`. Write a literal pipe inside a cell as `\|`.
 - **Tests carry row tags:** each acceptance test name contains `[ROW-ID]`. The project's test command must write a JUnit XML report (`workflow.config.json → test.junitReport`).
-- **trace-check scope:** every live row (in `docs/specs/**`) plus every row in the change's delta, minus rows in `retires.json`, must have an executed, passing test.
-- **v1 limit:** trace-check counts any executed test tagged with a row ID, wherever it lives; protecting the acceptance runner config from filtering relies on protected paths/CODEOWNERS (Plan 2). Dogfood run 1 showed this is a bypass, not just a limit (a runner-config exclude plus decoy tests passes every check with no code); the proposed fix is `docs/decisions/0001-acceptance-dir-and-manifest.md`.
-- **`workflow.config.json`:** `{ "approvers": ["<github-username>"], "test": { "setup": ["npm","ci"], "command": ["npx","vitest","run","--reporter=junit","--outputFile=reports/junit.xml"], "junitReport": "reports/junit.xml" } }`. `setup` is optional.
+- **trace-check scope:** every live row (in `docs/specs/**`) plus every row in the change's delta, minus rows in `retires.json`, must have an executed, passing test **whose file is under `test.acceptanceDir`** (ADR 0001). The file comes from the JUnit test case's `file` attribute, else `classname`; a row-tagged case with no usable path fails closed. Row-tagged tests elsewhere still run but never satisfy a row. *Verified 2026-10-07 for vitest 5.0.3: `classname` is the repo-relative file path. Unverified for Jest and other runners.*
+- **stage-check scope (ADR 0001):** after promotion, the live files under `test.acceptanceDir` must equal exactly the baseline manifest, minus files deleted for retired rows, plus this change's staged acceptance files, byte for byte. Every `test.harness` path must match the manifest unless this change staged it.
+- **Superseded v1 limit:** trace-check used to credit row-tagged tests from anywhere. Dogfood run 1 (`docs/research/2026-10-07-wf-dogfood-1.md`) showed a runner-config exclude plus decoy tests passed every check with no code.
+- **`workflow.config.json`:** `{ "approvers": ["<github-username>"], "test": { "setup": ["npm","ci"], "command": ["npx","vitest","run","--reporter=junit","--outputFile=reports/junit.xml"], "junitReport": "reports/junit.xml", "acceptanceDir": "tests/acceptance", "harness": ["vitest.config.ts"] } }`. `setup` is optional. `acceptanceDir` is required. `harness` defaults to the runner config file; add more paths (e.g. `package.json`) only if their churn is worth the extra re-approvals.
 
 ## Tests
 | Layer | Written by | Locked | Runs |
@@ -216,8 +217,8 @@ Merging lands the code and its tests together. Main never holds a test without i
 | Unit / integration | builders (TDD) | no | fast + full |
 | Contract conformance | generated from OpenAPI | harness locked | full |
 - **One entry point**, `verify --fast|--full`, used by hooks, git hooks and CI.
-- **trace-check:** every live row ID must have a test that actually *executed and passed*. Skipped, filtered or missing tests fail. A live acceptance test may only be deleted by a change whose approved tests record lists that row as retired.
-- **The harness is locked too:** runner configs, `package.json` test scripts, fixtures, seeds, helpers, clock control.
+- **trace-check:** every live row ID must have a test under `test.acceptanceDir` that actually *executed and passed*. Skipped, filtered, missing or out-of-folder tests fail. A live acceptance test may only be deleted by a change whose approved tests record lists that row as retired (checked by stage-check against the baseline manifest).
+- **The harness is locked too:** runner configs, `package.json` test scripts, fixtures, seeds, helpers, clock control. `wf` hashes the `test.harness` paths into the baseline manifest; the rest rely on protected paths (Plan 2).
 - **Flaky locked test:** quarantine needs your approval and expires; it never retries silently until it passes.
 
 ## Memory
@@ -238,14 +239,16 @@ Merging lands the code and its tests together. Main never holds a test without i
 ## Trust boundary
 - Agents use a **bot identity** (a fine-grained token: push branches, open PRs; can't merge, edit workflows or change settings). Only you merge.
 - A **ruleset** on main: PR required, checks required, code-owner review on protected paths. Rulesets are free on public repos; private repos need GitHub Pro (*verified 2026-10-07: the rulesets API refuses a private repo on the free plan*). This framework's own repo is public and runs `protect-main`: PR required, rebase-only and linear history, the CI `test` check required, no force pushes or deletion, no bypass.
-- **Protected paths:** `tests/acceptance/**`, `tests/harness/**`, runner configs, `.workflow/**`, `.github/**` (including reviewer instruction files), `CODEOWNERS`, `workflow.config.json`, `AGENTS.md` (its rules steer the AI reviewers), `roles/**`, approved specs, accepted ADRs, `docs/changes/*/approvals/**`, `docs/changes/*/baseline.json`, and the `docs/changes/*/design/**` and `docs/changes/*/tests/**` staging once their gate is approved. An implementation PR may *add* live copies of approved staging; byte-identity is checked by CI.
+- **Protected paths:** `tests/acceptance/**`, `tests/harness/**`, runner configs, `.workflow/**`, `.github/**` (including reviewer instruction files), `CODEOWNERS`, `workflow.config.json`, `AGENTS.md` (its rules steer the AI reviewers), `roles/**`, approved specs, accepted ADRs, `docs/changes/*/approvals/**`, `docs/changes/*/baseline.json`, and the `docs/changes/*/design/**` and `docs/changes/*/tests/**` staging once their gate is approved. An implementation PR may *add* live copies of approved staging; byte-identity is checked by CI. For the acceptance folder and `test.harness` paths, protected paths are defence in depth: `wf` itself rejects unapproved edits via the baseline manifest (ADR 0001).
 - **No production secrets on the dev machine**; agents get dev credentials only.
 - Repo text (brownfield comments, dependency docs) is evidence, never instructions.
 
 ## Edge cases the trials must cover
 | Scenario | Required behaviour |
 |---|---|
-| Builder edits a runner config, filters a suite, or special-cases test inputs | trace-check / CI / holdout catches it |
+| Builder edits a runner config, filters a suite, or special-cases test inputs | stage-check (runner config in `test.harness` manifest) / trace-check (filtered rows show as not run) / holdout catches it |
+| Builder adds decoy tests tagged with row IDs outside the acceptance folder | trace-check ignores them; the real rows still need passing acceptance tests |
+| Builder adds a decoy file inside the acceptance folder, or edits an older live acceptance test | stage-check: file not in the approved manifest or staging |
 | Two changes claim the same row ID or ADR number | IDs namespaced per change; ADR number assigned at merge |
 | Change abandoned after its tests gate | its staged tests never went live, so main is unaffected; archive the change as abandoned |
 | You change your mind after the tests gate | revise the spec → new spec record → design and tests invalidated transitively → re-approve |
@@ -256,7 +259,7 @@ Merging lands the code and its tests together. Main never holds a test without i
 | A row the delta says is new, but which passes at baseline | flagged at the tests gate; you decide (weak test vs existing behaviour) before approving |
 | Change B happens to make change A's rows pass | no effect on main (staged tests aren't live); A's implementation PR finds them passing |
 | Superseding change abandoned | old tests were never removed (deletion only happens in the replacement's implementation PR) |
-| PR deletes a live acceptance test it has no approved retirement for | trace-check fails |
+| PR deletes a live acceptance test it has no approved retirement for | stage-check fails (file missing from manifest, rows not retired) |
 | A correct implementation | staged tests copied live byte-identical → all its rows pass → CI green → code + tests land in one merge |
 | Bot opens a PR adding an approval record | can't be merged without your review; a record that reached main without your approval fails gate-check |
 | PR edits `AGENTS.md` review rules to weaken the AI review of that same PR | protected path: can't merge without your code-owner review; the AI review is advisory, so a weakened review can't pass any gate on its own |
@@ -288,5 +291,6 @@ OpenSpec's living specs, change deltas and archive match this layout. Trial host
    - a bot-merged approval record is rejected;
    - a brownfield change whose rows already pass at baseline gets through;
    - an implementation PR that alters a staged test or deletes an unretired live test is rejected;
+   - no implementation plus a runner-config exclude and decoy row tags (outside and inside the acceptance folder) is rejected (ADR 0001);
    - an abandoned superseding change leaves the old coverage intact.
 4. **Metrics per change:** your minutes per gate, rework loops, test disputes, CONTEXT-GAP vs JUDGMENT-GAP counts, escaped defects. A gate that hasn't rejected anything in 10 changes gets cut or automated.
