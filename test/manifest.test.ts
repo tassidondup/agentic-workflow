@@ -111,6 +111,15 @@ describe('manifestProblems (ADR 0001)', () => {
     expect(manifestProblems(repo.root, cfg, m, scope([], ['LST-001', 'LST-009']))).toEqual([]);
   });
 
+  it('refuses deleting an acceptance file with no row tags, since no retirement covers it (final review)', () => {
+    repo = makeRepo({ 'tests/acceptance/old.test.ts': '// [LST-001]', 'tests/acceptance/cases/c1.json': '{"price":0}' });
+    const m = buildManifest(repo.root, cfg);
+    rmSync(join(repo.root, 'tests', 'acceptance', 'cases', 'c1.json'));
+    expect(manifestProblems(repo.root, cfg, m, scope([], ['LST-001']))).toEqual([
+      'tests/acceptance/cases/c1.json was deleted, but it has no row tags, so no retirement covers it',
+    ]);
+  });
+
   it('flags a harness file that changed, appeared or vanished, unless staged', () => {
     const m = atGate();
     repo.write('vitest.config.ts', "exclude: ['tests/acceptance/**']");
