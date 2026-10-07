@@ -85,6 +85,8 @@ function deletionProblems(manifest: Manifest, live: ReadonlySet<string>, scope: 
   return manifest.acceptance
     .filter((e) => !live.has(e.path) && !scope.staged.has(e.path))
     .flatMap((e) => {
+      // An untagged file (case data, fixture, helper) can't be covered by retires.json, so deleting it never passes.
+      if (e.rows.length === 0) return [`${e.path} was deleted, but it has no row tags, so no retirement covers it`];
       const kept = e.rows.filter((r) => !scope.retired.has(r));
       return kept.length === 0 ? [] : [`${e.path} was deleted, but its rows ${kept.join(', ')} are not retired`];
     });
