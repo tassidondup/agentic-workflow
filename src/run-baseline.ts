@@ -1,6 +1,7 @@
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { acceptanceCases } from './acceptance.js';
 import { computeBaseline, type Baseline, type BaselineInput } from './baseline.js';
 import { baselineInputs } from './baseline-file.js';
 import { readChange, readRetires } from './change.js';
@@ -8,6 +9,7 @@ import { CONFIG_FILE, loadConfig, type WorkflowConfig } from './config.js';
 import { realExec, type Exec } from './exec.js';
 import { canonicalJson } from './hash.js';
 import { parseJUnit, type TestCase } from './junit.js';
+import { buildManifest } from './manifest.js';
 import { changeRepoDir } from './paths.js';
 import { lstatInRepo, readRepoFile, removeRepoFile, writeRepoFile } from './safe-fs.js';
 import { changeRowIds, liveRowIds } from './spec-index.js';
@@ -51,7 +53,7 @@ type Inputs = Omit<BaselineInput, 'cases'>;
 
 // Everything the baseline is measured against comes from the HEAD worktree, read before
 // staging touches it, so the result describes exactly what is committed (I7).
-function readInputs(wt: string, id: string): Inputs {
+function readInputs(wt: string, id: string, config: WorkflowConfig): Inputs {
   return {
     id,
     changeRowIds: changeRowIds(wt, id),
@@ -59,6 +61,7 @@ function readInputs(wt: string, id: string): Inputs {
     live: liveRowIds(wt),
     noBehaviourChange: readChange(wt, id).noBehaviourChange,
     inputsSha256: baselineInputs(wt, id),
+    manifest: buildManifest(wt, config),
   };
 }
 
@@ -99,9 +102,11 @@ export function runBaseline(root: string, id: string, exec: Exec = realExec): { 
     const add = exec('git', ['worktree', 'add', '--detach', wt, 'HEAD'], root);
     if (add.status !== 0) throw new Error(`git worktree add failed: ${add.stderr.trim()}`);
     const config = loadConfig(wt);
-    const inputs = readInputs(wt, id);
+    const inputs = readInputs(wt, id, config);
     stageIntoWorktree(wt, id, config.test.junitReport);
-    const outcome = computeBaseline({ ...inputs, cases: runTests(exec, config, wt) });
+    const scoped = acceptanceCases(wt, config.test.acceptanceDir, runTests(exec, config, wt));
+    if (scoped.problems.length > 0) return { baseline: null, problems: scoped.problems };
+    const outcome = computeBaseline({ ...inputs, cases: scoped.cases });
     if (outcome.baseline) writeRepoFile(root, `${dir}/baseline.json`, canonicalJson(outcome.baseline));
     return outcome;
   } finally {

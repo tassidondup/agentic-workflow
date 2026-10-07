@@ -3,6 +3,7 @@ import { readChange, readJsonFile, readRetires } from './change.js';
 import { CONFIG_FILE, loadConfig } from './config.js';
 import { isObject } from './guards.js';
 import { canonicalJson, sha256 } from './hash.js';
+import { parseManifest, type Manifest } from './manifest.js';
 import { changeRepoDir } from './paths.js';
 import { hashRepoFile, listRepoFiles, lstatInRepo } from './safe-fs.js';
 import { changeRowIds } from './spec-index.js';
@@ -42,8 +43,16 @@ function readBaselineJson(root: string, id: string): Record<string, unknown> {
   return isObject(raw) ? raw : fail('must be a JSON object');
 }
 
-/** Throws unless baseline.json was produced by `wf baseline` for the current spec-delta, tests and retirements. */
-export function validateBaseline(root: string, id: string): void {
+function manifestOf(raw: Readonly<Record<string, unknown>>): Manifest {
+  try {
+    return parseManifest(raw);
+  } catch (e) {
+    return fail((e as Error).message);
+  }
+}
+
+/** Throws unless baseline.json was produced by `wf baseline` for the current spec-delta, tests, retirements and test settings; returns its manifest. */
+export function validateBaseline(root: string, id: string): Manifest {
   const raw = readBaselineJson(root, id);
   if (raw.change !== id) fail(`"change" must be "${id}"`);
   const rows = isObject(raw.rows) ? raw.rows : fail('"rows" must be an object');
@@ -57,7 +66,9 @@ export function validateBaseline(root: string, id: string): void {
   if (!Array.isArray(raw.flags) || !raw.flags.every((f) => typeof f === 'string')) fail('"flags" must be a list of strings');
   const problems = behaviourProblems(values.filter((v) => v === 'fails').length, readChange(root, id).noBehaviourChange);
   if (problems.length > 0) fail((problems[0] as string).replace(/^./, (c) => c.toLowerCase()));
+  const manifest = manifestOf(raw);
   if (raw.inputs_sha256 !== baselineInputs(root, id)) {
-    fail('spec-delta.md, tests/ or retires.json changed since the baseline ran, or tests/ holds git-ignored files (inputs_sha256 mismatch)');
+    fail('spec-delta.md, tests/, retires.json or the test settings in workflow.config.json changed since the baseline ran, or tests/ holds git-ignored files (inputs_sha256 mismatch)');
   }
+  return manifest;
 }

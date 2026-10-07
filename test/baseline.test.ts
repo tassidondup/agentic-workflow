@@ -6,13 +6,22 @@ const tc = (id: string, status: TestCase['status']): TestCase => ({ name: `[${id
 const live = new Set(['LST-001']);
 const SHA = 'a'.repeat(64);
 const input = (changeRowIds: string[], cases: TestCase[], noBehaviourChange = false, retired: string[] = []): BaselineInput =>
-  ({ id: 'c1', changeRowIds, retired: new Set(retired), live, cases, noBehaviourChange, inputsSha256: SHA });
+  ({ id: 'c1', changeRowIds, retired: new Set(retired), live, cases, noBehaviourChange, inputsSha256: SHA, manifest: { acceptance: [], harness: [] } });
 
 describe('computeBaseline', () => {
   it('records passes and fails, binds the inputs hash, and requires at least one failing row', () => {
     const r = computeBaseline(input(['LST-001', 'LST-002'], [tc('LST-001', 'passed'), tc('LST-002', 'failed')]));
     expect(r.problems).toEqual([]);
-    expect(r.baseline).toEqual({ change: 'c1', rows: { 'LST-001': 'passes', 'LST-002': 'fails' }, flags: [], inputs_sha256: SHA });
+    expect(r.baseline).toEqual({ change: 'c1', rows: { 'LST-001': 'passes', 'LST-002': 'fails' }, flags: [], inputs_sha256: SHA, acceptance: [], harness: [] });
+  });
+  it('carries the manifest into the baseline (ADR 0001)', () => {
+    const manifest = {
+      acceptance: [{ path: 'tests/acceptance/a.test.ts', sha256: SHA, rows: ['LST-001'] }],
+      harness: [{ path: 'vitest.config.ts', sha256: null }],
+    };
+    const r = computeBaseline({ ...input(['LST-002'], [tc('LST-002', 'failed')]), manifest });
+    expect(r.baseline?.acceptance).toEqual(manifest.acceptance);
+    expect(r.baseline?.harness).toEqual(manifest.harness);
   });
   it('rejects a behaviour change where nothing fails at baseline', () => {
     const r = computeBaseline(input(['LST-001'], [tc('LST-001', 'passed')]));

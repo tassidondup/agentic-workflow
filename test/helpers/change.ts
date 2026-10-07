@@ -1,7 +1,15 @@
 import { approve } from '../../src/approve.js';
 import { baselineInputs } from '../../src/baseline-file.js';
+import { loadConfig } from '../../src/config.js';
+import { buildManifest } from '../../src/manifest.js';
 import { changeRowIds } from '../../src/spec-index.js';
 import type { TestRepo } from './repo.js';
+
+/** A valid workflow.config.json for fixtures: acceptance tests live in tests/acceptance, no harness files. */
+export const CONFIG = JSON.stringify({
+  approvers: ['tassi'],
+  test: { command: ['node', '-e', '0'], junitReport: 'reports/junit.xml', acceptanceDir: 'tests/acceptance', harness: [] },
+});
 
 const ROWS = '| ID | x | Expected |\n|---|---|---|\n| LST-001 | 1 | 2 |\n';
 
@@ -9,6 +17,7 @@ const ROWS = '| ID | x | Expected |\n|---|---|---|\n| LST-001 | 1 | 2 |\n';
 export function changeFiles(id = 'c1', extra: Record<string, string> = {}): Record<string, string> {
   const c = `docs/changes/${id}`;
   return {
+    'workflow.config.json': CONFIG,
     [`${c}/proposal.md`]: 'p',
     [`${c}/spec-delta.md`]: ROWS,
     [`${c}/change.json`]: '{"level":"P1","noBehaviourChange":false}',
@@ -21,7 +30,7 @@ export function changeFiles(id = 'c1', extra: Record<string, string> = {}): Reco
 /** Writes a baseline.json that matches the current inputs, with every row failing. */
 export function writeValidBaseline(repo: TestRepo, id = 'c1'): void {
   const rows = Object.fromEntries(changeRowIds(repo.root, id).map((r) => [r, 'fails']));
-  const body = { change: id, rows, flags: [], inputs_sha256: baselineInputs(repo.root, id) };
+  const body = { change: id, rows, flags: [], inputs_sha256: baselineInputs(repo.root, id), ...buildManifest(repo.root, loadConfig(repo.root)) };
   repo.write(`docs/changes/${id}/baseline.json`, JSON.stringify(body));
 }
 
