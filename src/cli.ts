@@ -26,7 +26,7 @@ const USAGE = `Usage: wf <command> [args] [--root <dir>]
   promote <id> <design|tests>          copy staging into live paths
   stage-check <id>                     live files must equal approved staging
   baseline <id>                        run staged tests against HEAD, write baseline.json
-  trace-check <id> --report <path>     every required row must have an executed, passing test
+  trace-check <id> --report <path>     every required row must have an executed, passing test under test.acceptanceDir
   spec-lint <id>                       lint the change's example tables
   memory-check                         check context.md, glossary.md and decision audits`;
 
