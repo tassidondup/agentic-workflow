@@ -16,7 +16,7 @@ const rowsJson = JSON.stringify({ rows: [{ id: 'LST-001', title: 'valid', existi
 
 function setup(extraConfig: Record<string, unknown> = {}): void {
   repo = makeRepo({
-    'workflow.config.json': JSON.stringify({ approvers: ['tassi'], test: { command: ['node', runner], junitReport: 'reports/junit.xml', ...extraConfig } }),
+    'workflow.config.json': JSON.stringify({ approvers: ['tassi'], test: { command: ['node', runner], junitReport: 'reports/junit.xml', acceptanceDir: 'tests/acceptance', harness: [], ...extraConfig } }),
     'docs/specs/listing/spec.md': '| ID | Price | Expected |\n|---|---|---|\n| LST-001 | 1 | 201 |\n',
     [`${C}/spec-delta.md`]: table,
     [`${C}/change.json`]: '{"level":"P1","noBehaviourChange":false}',
@@ -41,7 +41,7 @@ describe('runBaseline', () => {
 
   it('refuses when workflow.config.json has uncommitted changes', () => {
     setup();
-    repo.write('workflow.config.json', JSON.stringify({ approvers: ['tassi'], test: { command: ['node', '-e', ''], junitReport: 'r.xml' } }));
+    repo.write('workflow.config.json', JSON.stringify({ approvers: ['tassi'], test: { command: ['node', '-e', ''], junitReport: 'r.xml', acceptanceDir: 'tests/acceptance', harness: [] } }));
     expect(() => runBaseline(repo.root, 'c1')).toThrow(/Commit workflow\.config\.json before running the baseline/);
   });
 

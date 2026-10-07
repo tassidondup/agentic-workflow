@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { join } from 'node:path';
 import {
-  assertChangeId, assertSafeRepoPath, changeDir, changeRepoDir, fromRepoPath, toRepoPath,
+  assertChangeId, assertSafeRepoPath, changeDir, changeRepoDir, fromRepoPath, isUnderPath, toRepoPath,
 } from '../src/paths.js';
 import { makeRepo, type TestRepo } from './helpers/repo.js';
 
@@ -43,5 +43,14 @@ describe('repo path conversion', () => {
     expect(() => changeDir(repo.root, '../abc')).toThrow(/Invalid change id/);
     expect(changeRepoDir('abc')).toBe('docs/changes/abc');
     expect(() => changeRepoDir('../abc')).toThrow(/Invalid change id/);
+  });
+});
+
+describe('isUnderPath', () => {
+  it('compares whole path segments', () => {
+    expect(isUnderPath('tests/acceptance', 'tests/acceptance')).toBe(true);
+    expect(isUnderPath('tests/acceptance', 'tests/acceptance/a.test.ts')).toBe(true);
+    expect(isUnderPath('tests/acceptance', 'tests/acceptance-evil/a.test.ts')).toBe(false);
+    expect(isUnderPath('tests/acceptance', 'tests')).toBe(false);
   });
 });

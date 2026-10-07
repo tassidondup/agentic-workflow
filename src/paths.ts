@@ -39,3 +39,6 @@ export const changeDir = (root: string, id: string): string =>
 
 /** Repo path of a change folder, e.g. `docs/changes/<id>`. */
 export const changeRepoDir = (id: string): string => `docs/changes/${assertChangeId(id)}`;
+
+/** True if `path` is `dir` or inside it. Compares whole segments, so `tests/acceptance-x` is not inside `tests/acceptance`. */
+export const isUnderPath = (dir: string, path: string): boolean => path === dir || path.startsWith(`${dir}/`);
