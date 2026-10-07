@@ -27,7 +27,7 @@ Three changes to the `wf` core. No GitHub dependency.
 
 **3. stage-check checks the whole acceptance dir and the harness.** After promotion, the live files under `acceptanceDir` must equal exactly:
 `manifest − files deleted for retired rows + this change's staged acceptance files`, byte for byte. Any extra, missing or edited file fails. Every `test.harness` path must match the manifest unless this change staged it.
-- A deleted live file is allowed only if every row tag it contained is in `retires.json` (this also covers the design's "retired-test deletion" rule, finding P2 in the dogfood report, without needing a git diff).
+- A deleted live file is allowed only if it contained at least one row tag and every one is in `retires.json`. Untagged files (case data, fixtures, helpers) can never be deleted this way, because a data-driven test could otherwise pass with nothing left to check (found in the final review) (this also covers the design's "retired-test deletion" rule, finding P2 in the dogfood report, without needing a git diff).
 
 ## Consequences
 **Gains**
@@ -41,7 +41,9 @@ Three changes to the `wf` core. No GitHub dependency.
 - `baseline.json` and `inputs_sha256` gain fields; existing tests and fixtures need updating.
 
 **Not solved**
-- A custom JUnit reporter, or a reporter option that rewrites `classname`, can still forge paths. That edit has to go into a runner config or harness file, so part 3 catches it if that file is in `test.harness`. A test that lies (e.g. mocks the code under test) is still caught only by review and holdouts.
+- **The JUnit report is produced by code the builder controls, so it is evidence, not proof.** The final review showed two forgeries that need no harness or config edit: implementation code that imports the test library and disables its assertions (e.g. patching `chai.Assertion.prototype.assert`), and a test that spawns a detached process to rewrite the report after the runner exits. A `postinstall` script or lockfile change run by `test.setup` is the same class. `wf` checks the report's *structure* (which rows ran where); it cannot check that the run was honest. Mitigations, all outside this ADR: run the test command in an isolated CI step and read the report only after that step's processes have exited; protect `package.json` and the lockfile (Plan 2); black-box holdouts run out of process; a static check that non-test source never imports the test library. Recorded as a known limit; a follow-up ADR decides which to adopt.
+- A custom JUnit reporter, or a reporter option that rewrites `classname`, can forge paths too. That edit lives in a runner config, so part 3 catches it if that file is in `test.harness`. A test that lies (e.g. mocks the code under test) is caught only by review and holdouts.
+- **The manifest comes from the tests-gate branch's HEAD, not from main.** A tests-gate PR that also commits a runner-config exclude or a decoy inside the acceptance folder gets both baked into the approved manifest; you see only a list of hashes. Plan 2 closes this: CI refuses a tests-gate PR that changes anything outside `docs/changes/<id>/**`.
 - Changing the `test` settings in `workflow.config.json` after the tests gate (e.g. pointing `acceptanceDir` at `src/`): `inputs_sha256` binds them, but Plan 1 only checked it at approval. The implementation re-validates `baseline.json` in stage-check and trace-check, so drift fails there too. How CI invokes the test command is outside `wf` (Plan 2).
 
 ## Alternatives considered
