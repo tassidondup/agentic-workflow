@@ -1,6 +1,6 @@
 # 0002. Defend the test report against builder code
 
-**Status:** Accepted (2026-10-07). Design doc updated to v2.5. Layers 1–2 are built in Plan 2; layer 3 and the review rule ship with the installer (Plan 3).
+**Status:** Accepted (2026-10-07). Design doc updated to v2.5. Layers 1–2 are built in Plan 2b; layer 3 and the review rule ship with the installer (Plan 3).
 **Follows:** ADR 0001 (*Not solved*, first bullet). **Evidence:** the final review of the ADR 0001 branch (PR #3).
 
 ## Context
@@ -34,7 +34,7 @@ Detect T2 everywhere cheaply. Prevent it where the project has a process boundar
 - **Catches:** global assertion disabling, blanket all-pass rewrites, and runner filters that drop unknown files.
 - **Misses:** a targeted forgery that spares the canary. Builder code can read the canary file while the tests run. This layer raises the bar; it doesn't close the hole.
 
-**Layer 2: isolated test run (Plan 2 CI template).**
+**Layer 2: isolated test run (Plan 2b CI template).**
 - CI runs `test.setup` and `test.command` inside `docker run --rm --network none`, with the repo mounted and the report written to a mounted folder. The host reads the report only after the container has exited, then runs `wf` on the host from the checked-out commit.
 - **Catches:** any rewriter still alive after the test command ends, because the PID namespace dies with the container (fact above). It also stops network exfiltration from tests.
 - **Misses:** a rewrite in the moments between vitest writing the report and exiting, and assertion patching (it happens inside the run).
@@ -72,6 +72,6 @@ Detect T2 everywhere cheaply. Prevent it where the project has a process boundar
 ## Decisions (2026-10-07)
 1. **Threat model:** T2 is in scope. Detect it everywhere (layers 1–2); prevent it where a project opts into layer 3.
 2. **Layer 3 policy:** the recommended default for projects with an HTTP or CLI boundary, chosen during `wf init` (Plan 3) and recorded in the project's `workflow.config.json`. It is not tied to planning levels, because retrofitting it mid-project is the expensive part.
-3. **Timing:** layer 1 (canary) is built in Plan 2 together with layer 2 (isolated CI run), since its ordering and nonce live in the CI template. T1 is already covered by ADR 0001, so nothing ships before Plan 2.
+3. **Timing:** layer 1 (canary) is built in Plan 2b together with layer 2 (isolated CI run), since its ordering and nonce live in the CI template. T1 is already covered by ADR 0001, so nothing ships before Plan 2.
 
-Plan 2 scope from this ADR: `wf canary write`, `trace-check --canary`, `test.canary` config and the vitest template, and the containerized CI test step. Plan 2 also carries ADR 0001's gate-branch fix: CI refuses a tests-gate PR that changes anything outside `docs/changes/<id>/**`.
+Plan 2 is split in two (see `AGENTS.md` *Status*). **Plan 2b** carries this ADR: `wf canary write`, `trace-check --canary`, `test.canary` config and the vitest template, and the containerized CI test step. **Plan 2a** carries ADR 0001's gate-branch fix: CI refuses a tests-gate PR that changes anything outside `docs/changes/<id>/**`.
