@@ -23,7 +23,7 @@ Three changes to the `wf` core. No GitHub dependency.
 - File identity comes from the test case's `file` attribute if present, else `classname`. *Verified 2026-10-07 for vitest 5.0.3:* `classname` is the repo-relative file path (`src/decoy.test.ts`, `tests/acceptance/shipping/member.test.ts`). *Unverified:* Jest (`jest-junit` sets `classname` from a template; a `file` attribute is opt-in) and other runners. The installer must configure the reporter so the path is present; `wf` fails closed when a row-tagged case has no usable path.
 - Effect on the bypass: the decoys stop counting, and the excluded acceptance tests show as `not-run`, so trace-check fails.
 
-**2. Acceptance manifest in `baseline.json`.** `wf baseline` records `acceptance: [{ path, sha256 }]` for every file under `acceptanceDir` on HEAD, and `harness: [{ path, sha256 }]` for every path in a new `test.harness` list (default: the runner config file). Both are covered by the tests-gate hash, so you approve them with the baseline.
+**2. Acceptance manifest in `baseline.json`.** `wf baseline` records `acceptance: [{ path, sha256, rows }]` for every file under `acceptanceDir` on HEAD (`rows`: the row tags in the file, used by the deletion rule), and `harness: [{ path, sha256 }]` for every path in a new, required `test.harness` list (`sha256` is null if the path doesn't exist; the installer fills in the runner config file). Both are covered by the tests-gate hash, so you approve them with the baseline.
 
 **3. stage-check checks the whole acceptance dir and the harness.** After promotion, the live files under `acceptanceDir` must equal exactly:
 `manifest − files deleted for retired rows + this change's staged acceptance files`, byte for byte. Any extra, missing or edited file fails. Every `test.harness` path must match the manifest unless this change staged it.
@@ -37,12 +37,12 @@ Three changes to the `wf` core. No GitHub dependency.
 
 **Costs**
 - **More re-approvals.** If another change merges new acceptance files or a runner-config edit after this change's tests gate, this change's manifest is out of date: stage-check fails until you re-run the baseline and re-approve tests. That serializes concurrent changes that touch acceptance tests or harness. The design already serializes harness overlap, but this widens it to any acceptance file. Acceptable while you're the only approver; revisit for Plan 4 (team layer).
-- `test.harness` must list the right files. Too few and a filter edit slips through; too many (e.g. `package.json`, which changes with every dependency bump) and re-approvals get noisy. Default to the runner config only; projects opt into more.
+- `test.harness` must list the right files. Too few and a filter edit slips through; too many (e.g. `package.json`, which changes with every dependency bump) and re-approvals get noisy. Start with the runner config only; projects opt into more.
 - `baseline.json` and `inputs_sha256` gain fields; existing tests and fixtures need updating.
 
 **Not solved**
 - A custom JUnit reporter, or a reporter option that rewrites `classname`, can still forge paths. That edit has to go into a runner config or harness file, so part 3 catches it if that file is in `test.harness`. A test that lies (e.g. mocks the code under test) is still caught only by review and holdouts.
-- A test command changed in `workflow.config.json` is already bound by `inputs_sha256`. A change to it in CI is outside `wf`'s reach (Plan 2).
+- Changing the `test` settings in `workflow.config.json` after the tests gate (e.g. pointing `acceptanceDir` at `src/`): `inputs_sha256` binds them, but Plan 1 only checked it at approval. The implementation re-validates `baseline.json` in stage-check and trace-check, so drift fails there too. How CI invokes the test command is outside `wf` (Plan 2).
 
 ## Alternatives considered
 - **Rely on Plan 2 protected paths and CODEOWNERS only.** Rejected: it turns a mechanical guarantee into "you notice a one-line config diff", which is the review load this workflow exists to remove.
