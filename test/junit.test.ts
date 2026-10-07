@@ -21,7 +21,12 @@ describe('parseJUnit (Review Focus 4)', () => {
 
   it('accepts a single <testsuite> root and multiple row tags on one test', () => {
     const xml = '<testsuite name="s"><testcase classname="c" name="[LST-001][LST-002] shared setup"></testcase></testsuite>';
-    expect(parseJUnit(xml)).toEqual([{ name: '[LST-001][LST-002] shared setup', classname: 'c', status: 'passed', rowIds: ['LST-001', 'LST-002'] }]);
+    expect(parseJUnit(xml)).toEqual([{ name: '[LST-001][LST-002] shared setup', classname: 'c', file: 'c', status: 'passed', rowIds: ['LST-001', 'LST-002'] }]);
+  });
+
+  it('takes each case file from its file attribute, else its classname (ADR 0001)', () => {
+    const xml = '<testsuite name="s"><testcase classname="tests/a.test.ts" name="[LST-001] x"/><testcase classname="Suite" file="./tests/b.test.ts" name="[LST-002] y"/></testsuite>';
+    expect(parseJUnit(xml).map((c) => c.file)).toEqual(['tests/a.test.ts', './tests/b.test.ts']);
   });
 
   it('picks up a row tag that appears only in the classname', () => {

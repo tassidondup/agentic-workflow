@@ -1,19 +1,10 @@
 import { assertChangeExists, readRetires, ROW_ID } from './change.js';
 import { checkGate } from './gate-check.js';
 import type { TestCase } from './junit.js';
+import { rowOutcomes } from './outcomes.js';
 import { changeRowIds, changeRows, liveRowIds, liveRows } from './spec-index.js';
 
-export type RowOutcome = 'passes' | 'fails' | 'not-run';
-
-export function rowOutcomes(rowIds: readonly string[], cases: readonly TestCase[]): ReadonlyMap<string, RowOutcome> {
-  return new Map(
-    rowIds.map((id): [string, RowOutcome] => {
-      const executed = cases.filter((c) => c.rowIds.includes(id) && c.status !== 'skipped');
-      if (executed.length === 0) return [id, 'not-run'];
-      return [id, executed.every((c) => c.status === 'passed') ? 'passes' : 'fails'];
-    }),
-  );
-}
+export { rowOutcomes, type RowOutcome } from './outcomes.js';
 
 export function requiredRows(root: string, id: string): string[] {
   const retired = readRetires(root, id);

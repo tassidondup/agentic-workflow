@@ -4,6 +4,7 @@ import { isObject } from './guards.js';
 export interface TestCase {
   readonly name: string;
   readonly classname: string;
+  readonly file: string;
   readonly status: 'passed' | 'failed' | 'skipped';
   readonly rowIds: readonly string[];
 }
@@ -16,14 +17,16 @@ const parser = new XMLParser({
   isArray: (name) => name === 'testsuite' || name === 'testcase' || name === 'testsuites',
 });
 
-const tags = (text: string): string[] => [...text.matchAll(TAG)].map((m) => m[1] ?? '');
+/** Row tags like `[LST-004]` found in any text, in order of appearance (may repeat). */
+export const rowTags = (text: string): string[] => [...text.matchAll(TAG)].map((m) => m[1] ?? '');
 
 function toCase(node: unknown): TestCase {
   const tc = isObject(node) ? node : {};
   const name = String(tc['@_name'] ?? '');
   const classname = String(tc['@_classname'] ?? '');
   const status = 'failure' in tc || 'error' in tc ? 'failed' : 'skipped' in tc ? 'skipped' : 'passed';
-  return Object.freeze({ name, classname, status, rowIds: Object.freeze([...new Set([...tags(name), ...tags(classname)])]) });
+  const file = String(tc['@_file'] ?? classname);
+  return Object.freeze({ name, classname, file, status, rowIds: Object.freeze([...new Set([...rowTags(name), ...rowTags(classname)])]) });
 }
 
 function collect(node: unknown): TestCase[] {

@@ -4,7 +4,7 @@ import { requiredRows, rowOutcomes, traceCheck, traceImplementation } from '../s
 import { approveAll, changeFiles } from './helpers/change.js';
 import { makeRepo, type TestRepo } from './helpers/repo.js';
 
-const tc = (rowIds: string[], status: TestCase['status']): TestCase => ({ name: rowIds.map((r) => `[${r}]`).join(''), classname: 'c', status, rowIds });
+const tc = (rowIds: string[], status: TestCase['status']): TestCase => ({ name: rowIds.map((r) => `[${r}]`).join(''), classname: 'tests/acceptance/a.test.ts', file: 'tests/acceptance/a.test.ts', status, rowIds });
 
 describe('rowOutcomes (Review Focus 4)', () => {
   it('passes when every executed test passes; skipped never counts as executed', () => {
