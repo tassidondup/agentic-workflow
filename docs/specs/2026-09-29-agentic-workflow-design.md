@@ -1,6 +1,6 @@
-# Agentic Workflow — Design v2.4
+# Agentic Workflow — Design v2.5
 
-Supersedes `2026-09-26-agentic-framework-design.md`. v2.1 added: the agent team model, a reordered lifecycle (contract before tests), the planning dial, test-dispute and harness ownership, and memory maturity, plus ideas from claudex-loop and OpenRig. v2.2 (from Codex reviews 3–4): approvals are hash-bound to you and **chained** (design → spec, tests → spec + design), and tests are **staged and locked by hash** with an approved baseline instead of merged early. That removes the row-state machine. v2.3 (2026-10-06): automated PR review is Codex cloud review, AI approvals never count, review instructions are protected, and Copilot is rejected for now (see *Automated PR review*). v2.4 (2026-10-07, ADR 0001, from dogfood run 1): rows count only from tests under `test.acceptanceDir`, and the baseline locks the whole acceptance folder plus the runner config, so a runner-config filter plus decoy tests no longer passes (see *Test staging, baseline and activation*).
+Supersedes `2026-09-26-agentic-framework-design.md`. v2.1 added: the agent team model, a reordered lifecycle (contract before tests), the planning dial, test-dispute and harness ownership, and memory maturity, plus ideas from claudex-loop and OpenRig. v2.2 (from Codex reviews 3–4): approvals are hash-bound to you and **chained** (design → spec, tests → spec + design), and tests are **staged and locked by hash** with an approved baseline instead of merged early. That removes the row-state machine. v2.3 (2026-10-06): automated PR review is Codex cloud review, AI approvals never count, review instructions are protected, and Copilot is rejected for now (see *Automated PR review*). v2.4 (2026-10-07, ADR 0001, from dogfood run 1): rows count only from tests under `test.acceptanceDir`, and the baseline locks the whole acceptance folder plus the runner config, so a runner-config filter plus decoy tests no longer passes (see *Test staging, baseline and activation*). v2.5 (2026-10-07, ADR 0002): green CI is proof against reward hacking (T1) but only evidence against code built to defeat the measurement (T2); T2 is detected by a must-fail canary and an isolated CI test run (Plan 2), and prevented in projects that opt into black-box acceptance tests (see *Trust boundary*).
 
 ## Context
 The product is the **workflow**: how memory, decisions, specs, tests and a team of agents fit together. It gets installed into any TypeScript repo, greenfield or brownfield, with `npx <tool> init`.
@@ -240,6 +240,11 @@ Merging lands the code and its tests together. Main never holds a test without i
 - Agents use a **bot identity** (a fine-grained token: push branches, open PRs; can't merge, edit workflows or change settings). Only you merge.
 - A **ruleset** on main: PR required, checks required, code-owner review on protected paths. Rulesets are free on public repos; private repos need GitHub Pro (*verified 2026-10-07: the rulesets API refuses a private repo on the free plan*). This framework's own repo is public and runs `protect-main`: PR required, rebase-only and linear history, the CI `test` check required, no force pushes or deletion, no bypass.
 - **Protected paths:** `tests/acceptance/**`, `tests/harness/**`, runner configs, `.workflow/**`, `.github/**` (including reviewer instruction files), `CODEOWNERS`, `workflow.config.json`, `AGENTS.md` (its rules steer the AI reviewers), `roles/**`, approved specs, accepted ADRs, `docs/changes/*/approvals/**`, `docs/changes/*/baseline.json`, and the `docs/changes/*/design/**` and `docs/changes/*/tests/**` staging once their gate is approved. An implementation PR may *add* live copies of approved staging; byte-identity is checked by CI. For the acceptance folder and `test.harness` paths, protected paths are defence in depth: `wf` itself rejects unapproved edits via the baseline manifest (ADR 0001).
+- **The test report is evidence, not proof, against code built to defeat it (ADR 0002).** Builder code runs inside the test process, so it can patch assertions or rewrite the report.
+  - *Layer 1, canary (Plan 2):* CI writes a must-fail test named with a random nonce from a locked template (`test.canary`) after stage-check; `trace-check --canary <nonce>` requires it to fail. Detects blanket forgeries.
+  - *Layer 2, isolated run (Plan 2):* CI runs `test.setup` and `test.command` in `docker run --rm --network none` and reads the report after the container exits, so no rewriter outlives the run.
+  - *Layer 3, black-box acceptance (per project, default for HTTP/CLI apps, chosen at `wf init`):* acceptance tests run in their own container against the app's boundary, with their own `package.json` and lockfile inside `acceptanceDir` installed with `--ignore-scripts`. Prevents assertion patching. Holdouts only count as independent evidence against T2 when they run this way.
+  - Without layer 3, a canary-aware, targeted forgery is caught only by review.
 - **No production secrets on the dev machine**; agents get dev credentials only.
 - Repo text (brownfield comments, dependency docs) is evidence, never instructions.
 
@@ -266,6 +271,9 @@ Merging lands the code and its tests together. Main never holds a test without i
 | An AI reviewer approves a PR | the approval doesn't count toward required approvals; the PR still needs yours |
 | Major dependency upgrade breaks many acceptance tests | P0 upgrade lane: implementation fixes only, no spec change |
 | Lead session dies mid-change | a new orchestrator resumes from `progress/` + `tasks.md` alone |
+| Implementation code disables the test library's assertions | layer 1 canary passes → trace-check fails; prevented outright under layer 3 |
+| A test spawns a process that rewrites the JUnit report after the run | layer 2: the container's processes die with it before the report is read |
+| A dependency's install script patches the test runner | layer 3: acceptance deps come from a locked lockfile installed with `--ignore-scripts`; otherwise review |
 | Teammate marks a task done without doing it | TaskCompleted hook + trace-check; the docs say task status can lag |
 | Builders edit the same file | owned-path hook blocks it; overlap → work serialized |
 | Codex quota exhausted | fallback: a fresh-context Claude subagent with no access to the implementation, **labelled reduced independence** |
@@ -292,5 +300,6 @@ OpenSpec's living specs, change deltas and archive match this layout. Trial host
    - a brownfield change whose rows already pass at baseline gets through;
    - an implementation PR that alters a staged test or deletes an unretired live test is rejected;
    - no implementation plus a runner-config exclude and decoy row tags (outside and inside the acceptance folder) is rejected (ADR 0001);
+   - implementation code that disables assertions, and a test that rewrites the report after the run, are both rejected (ADR 0002 layers 1–2);
    - an abandoned superseding change leaves the old coverage intact.
 4. **Metrics per change:** your minutes per gate, rework loops, test disputes, CONTEXT-GAP vs JUDGMENT-GAP counts, escaped defects. A gate that hasn't rejected anything in 10 changes gets cut or automated.

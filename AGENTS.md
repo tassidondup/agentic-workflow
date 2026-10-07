@@ -5,8 +5,8 @@ A reusable agentic development workflow for TypeScript repos, greenfield and bro
 This repo is the **framework itself**, not an app. Don't bake any app's stack choices into it.
 
 ## Status
-Plan 1 (the `wf` core gate engine, `src/`) is merged: `docs/superpowers/plans/2026-10-05-wf-core-gate-engine.md`. ADR 0001 (decoy-test fix) is implemented. Next: Plan 2 (GitHub enforcement) and Spike S (agent teams + worktrees + Codex).
-- Current design: `docs/specs/2026-09-29-agentic-workflow-design.md` (v2.4). Read it before proposing changes.
+Plan 1 (the `wf` core gate engine, `src/`) is merged: `docs/superpowers/plans/2026-10-05-wf-core-gate-engine.md`. ADR 0001 (decoy-test fix) is implemented. Next: Plan 2 (GitHub enforcement, plus ADR 0002's canary and isolated CI test run, and refusing tests-gate PRs that touch files outside the change folder) and Spike S (agent teams + worktrees + Codex).
+- Current design: `docs/specs/2026-09-29-agentic-workflow-design.md` (v2.5). Read it before proposing changes.
 - Superseded design: `docs/specs/2026-09-26-agentic-framework-design.md`. Don't use it.
 - Research: `docs/research/`. Decisions: `docs/decisions/`.
 
