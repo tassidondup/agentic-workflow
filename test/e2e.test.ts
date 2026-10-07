@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { rmSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { run } from '../src/cli.js';
 import { git, makeRepo, type TestRepo } from './helpers/repo.js';
 
@@ -80,5 +81,66 @@ describe('full change lifecycle', () => {
     // A builder loosens a promoted test file: byte-identity fails.
     repo.write('tests/acceptance/rows.json', JSON.stringify({ rows: [] }));
     expect(wf('stage-check', 'listing-price-limits').out).toMatch(/tests\/acceptance\/rows\.json is different from approved staging/);
+  });
+
+  it('rejects every dogfood attack with no implementation (ADR 0001)', () => {
+    const id = 'listing-price-limits';
+    const config = (acceptanceDir: string): string => JSON.stringify({
+      approvers: ['tassi'],
+      test: { command: ['node', runner], junitReport: 'reports/junit.xml', acceptanceDir, harness: ['runner.config.json'] },
+    });
+    repo = makeRepo({
+      'workflow.config.json': config('tests/acceptance'),
+      'runner.config.json': '{"excludeAcceptance":false}',
+      'docs/context.md': '# Context\n', 'docs/glossary.md': '# Glossary\n',
+      'docs/specs/listing/spec.md': '| ID | Price | Expected |\n|---|---|---|\n| LST-001 | 999999 | 201 |\n',
+      'tests/acceptance/old.test.ts': '// [LST-001] accepts max\n',
+      [`${C}/proposal.md`]: 'Limit prices.',
+      [`${C}/change.json`]: '{"level":"P1","noBehaviourChange":false}',
+      [`${C}/spec-delta.md`]: '| ID | Price | Expected |\n|---|---|---|\n| LST-002 | 0 | 422 |\n',
+      [`${C}/design/design.md`]: 'Validate price in the API.',
+      [`${C}/tests/stage/tests/acceptance/rows.json`]: JSON.stringify({ rows: [
+        { id: 'LST-001', title: 'accepts max', existing: true },
+        { id: 'LST-002', title: 'rejects 0' },
+      ] }),
+    });
+    git(repo.root, 'init', '-q', '-b', 'main');
+    commit('init');
+    expect(wf('approve', id, 'spec').code).toBe(0);
+    expect(wf('approve', id, 'design').code).toBe(0);
+    commit('spec and design gates');
+    expect(wf('baseline', id).code).toBe(0);
+    expect(wf('approve', id, 'tests').code).toBe(0);
+    expect(wf('promote', id, 'tests').code).toBe(0);
+    const trace = (): { code: number; out: string } => {
+      spawnSync('node', [runner], { cwd: repo.root });
+      return wf('trace-check', id, '--report', 'reports/junit.xml');
+    };
+
+    // Honest state, no implementation: the real row fails and nothing else is wrong.
+    expect(trace().out).toMatch(/LST-002: failing/);
+    expect(wf('stage-check', id).code).toBe(0);
+
+    // The dogfood bypass: exclude the acceptance folder in the runner config, add passing decoys outside it.
+    repo.write('runner.config.json', '{"excludeAcceptance":true}');
+    repo.write('src/decoys.json', JSON.stringify({ rows: [{ id: 'LST-001', title: 'decoy' }, { id: 'LST-002', title: 'decoy' }] }));
+    const bypass = trace();
+    expect(bypass.code).toBe(1);
+    expect(bypass.out).toMatch(/LST-002: no executed test under tests\/acceptance/);
+    expect(wf('stage-check', id).out).toMatch(/runner\.config\.json \(test harness\) changed since the tests gate/);
+
+    // A decoy file inside the acceptance folder.
+    repo.write('tests/acceptance/decoy.test.ts', '// [LST-002] decoy\n');
+    expect(wf('stage-check', id).out).toMatch(/tests\/acceptance\/decoy\.test\.ts is not approved/);
+
+    // An older live acceptance test is loosened, then deleted without retiring its row.
+    repo.write('tests/acceptance/old.test.ts', '// [LST-001] loosened\n');
+    expect(wf('stage-check', id).out).toMatch(/tests\/acceptance\/old\.test\.ts changed since the tests gate/);
+    rmSync(join(repo.root, 'tests', 'acceptance', 'old.test.ts'));
+    expect(wf('stage-check', id).out).toMatch(/old\.test\.ts was deleted, but its rows LST-001 are not retired/);
+
+    // The acceptance folder is repointed at src/ after the tests gate.
+    repo.write('workflow.config.json', config('src'));
+    expect(trace().out).toMatch(/baseline\.json is stale or invalid: .*inputs_sha256 mismatch/);
   });
 });

@@ -1,6 +1,6 @@
 # 0001. Count rows only from the acceptance directory, and lock its contents in the baseline
 
-**Status:** Accepted (2026-10-07). Design doc updated to v2.4; implementation pending.
+**Status:** Accepted (2026-10-07). Implemented (plan `docs/superpowers/plans/2026-10-07-adr-0001-acceptance-scope.md`).
 **Evidence:** `docs/research/2026-10-07-wf-dogfood-1.md`, finding P0.
 
 ## Context
@@ -51,4 +51,4 @@ Three changes to the `wf` core. No GitHub dependency.
 
 ## Follow-up
 - Done (2026-10-07): design doc v2.4 replaces the "v1 limit", adds `acceptanceDir`, `harness` and the manifest to the `workflow.config.json` and `baseline.json` shapes, and makes Plan 2's protected paths defence in depth for these attacks.
-- To do: implement as a small plan before Plan 2, with an adversarial test for each attack: decoy outside the dir, runner-config exclude, decoy inside the dir, edited old acceptance test, deleted unretired test.
+- Done: implemented with an adversarial test for each attack (`test/e2e.test.ts`, "rejects every dogfood attack"). The same test fails against the pre-ADR code: the bypass exits 0 there.
