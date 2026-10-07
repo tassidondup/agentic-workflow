@@ -1,6 +1,6 @@
 # 0001. Count rows only from the acceptance directory, and lock its contents in the baseline
 
-**Status:** Proposed (2026-10-07). Needs your acceptance before implementation.
+**Status:** Accepted (2026-10-07). Design doc updated to v2.4; implementation pending.
 **Evidence:** `docs/research/2026-10-07-wf-dogfood-1.md`, finding P0.
 
 ## Context
@@ -49,6 +49,6 @@ Three changes to the `wf` core. No GitHub dependency.
 - **Only part 1 (`acceptanceDir`).** Closes the reported bypass but leaves decoy files inside the acceptance dir and edits to old acceptance tests unchecked. Rejected as half a fix.
 - **Diff against main in stage-check (`git diff main...HEAD`).** Rejected for the core: it depends on branch names and fetch state, and CI checkouts are often shallow. The manifest is self-contained and already hashed by the tests gate.
 
-## On acceptance
-- Update the design doc: replace the "v1 limit" line in *Implementation conventions*, add `acceptanceDir`, `harness` and the manifest to the `workflow.config.json` and `baseline.json` shapes, and narrow Plan 2's protected-paths role to defence in depth.
-- Implement as a small plan before Plan 2, with an adversarial test for each attack: decoy outside the dir, runner-config exclude, decoy inside the dir, edited old acceptance test, deleted unretired test.
+## Follow-up
+- Done (2026-10-07): design doc v2.4 replaces the "v1 limit", adds `acceptanceDir`, `harness` and the manifest to the `workflow.config.json` and `baseline.json` shapes, and makes Plan 2's protected paths defence in depth for these attacks.
+- To do: implement as a small plan before Plan 2, with an adversarial test for each attack: decoy outside the dir, runner-config exclude, decoy inside the dir, edited old acceptance test, deleted unretired test.
