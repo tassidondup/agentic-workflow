@@ -91,7 +91,7 @@ describe('approve tests validates baseline.json (I7)', () => {
 
   it('refuses a baseline taken before the test configuration changed', () => {
     const config = (command: string[]): string =>
-      JSON.stringify({ approvers: ['tassi'], test: { command, junitReport: 'reports/junit.xml' } });
+      JSON.stringify({ approvers: ['tassi'], test: { command, junitReport: 'reports/junit.xml', acceptanceDir: 'tests/acceptance', harness: [] } });
     ready({ 'workflow.config.json': config(['npx', 'vitest', 'run']) });
     writeBaseline();
     repo.write('workflow.config.json', config(['npx', 'vitest', 'run', 'tests/unit']));

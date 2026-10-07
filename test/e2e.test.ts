@@ -22,7 +22,7 @@ const commit = (msg: string): void => {
 describe('full change lifecycle', () => {
   it('gates, stages, baselines and traces a change; catches tampering', () => {
     repo = makeRepo({
-      'workflow.config.json': JSON.stringify({ approvers: ['tassi'], test: { command: ['node', runner], junitReport: 'reports/junit.xml' } }),
+      'workflow.config.json': JSON.stringify({ approvers: ['tassi'], test: { command: ['node', runner], junitReport: 'reports/junit.xml', acceptanceDir: 'tests/acceptance', harness: [] } }),
       'docs/context.md': '# Context\n', 'docs/glossary.md': '# Glossary\n',
       'docs/specs/listing/spec.md': '| ID | Price | Expected |\n|---|---|---|\n| LST-001 | 999999 | 201 |\n',
       [`${C}/proposal.md`]: 'Limit prices.',

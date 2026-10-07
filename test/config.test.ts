@@ -10,7 +10,7 @@ afterEach(() => repo?.cleanup());
 
 const good = {
   approvers: ['tassi'],
-  test: { command: ['npx', 'vitest', 'run'], junitReport: 'reports/junit.xml' },
+  test: { command: ['npx', 'vitest', 'run'], junitReport: 'reports/junit.xml', acceptanceDir: 'tests/acceptance', harness: ['vitest.config.ts'] },
 };
 
 describe('parseConfig', () => {
@@ -19,6 +19,25 @@ describe('parseConfig', () => {
     expect(c.approvers).toEqual(['tassi']);
     expect(c.test.setup).toBeNull();
     expect(Object.isFrozen(c)).toBe(true);
+  });
+  it('reads acceptanceDir and harness, and allows an empty harness', () => {
+    const c = parseConfig(good);
+    expect(c.test.acceptanceDir).toBe('tests/acceptance');
+    expect(c.test.harness).toEqual(['vitest.config.ts']);
+    expect(Object.isFrozen(c.test.harness)).toBe(true);
+    expect(parseConfig({ ...good, test: { ...good.test, harness: [] } }).test.harness).toEqual([]);
+  });
+  it.each([
+    ['missing acceptanceDir', { acceptanceDir: undefined }, /"test\.acceptanceDir" must be a repo-relative path/],
+    ['unsafe acceptanceDir', { acceptanceDir: '../tests' }, /"test\.acceptanceDir" is not a safe repo path/],
+    ['acceptanceDir that holds staging', { acceptanceDir: 'docs' }, /may not overlap docs\/changes/],
+    ['acceptanceDir inside staging', { acceptanceDir: 'docs/changes/c1/tests' }, /may not overlap docs\/changes/],
+    ['report inside acceptanceDir', { junitReport: 'tests/acceptance/junit.xml' }, /"test\.junitReport" may not be inside "test\.acceptanceDir"/],
+    ['missing harness', { harness: undefined }, /"test\.harness" must be a list/],
+    ['unsafe harness path', { harness: ['ok.ts', '/etc/passwd'] }, /"test\.harness\[1\]" is not a safe repo path/],
+    ['non-string harness path', { harness: [5] }, /"test\.harness\[0\]" must be a repo-relative path/],
+  ])('rejects %s (Review Focus 2)', (_name, patch, message) => {
+    expect(() => parseConfig({ ...good, test: { ...good.test, ...patch } })).toThrow(message);
   });
   it('accepts an optional setup command', () => {
     expect(parseConfig({ ...good, test: { ...good.test, setup: ['npm', 'ci'] } }).test.setup).toEqual(['npm', 'ci']);
@@ -48,7 +67,7 @@ describe('loadConfig', () => {
   it('rejects a symlinked workflow.config.json', () => {
     repo = makeRepo();
     const tmpFile = join(repo.root, 'config-target.json');
-    writeFileSync(tmpFile, '{"approvers":["user"],"test":{"command":["npm"],"junitReport":"reports/junit.xml"}}');
+    writeFileSync(tmpFile, '{"approvers":["user"],"test":{"command":["npm"],"junitReport":"reports/junit.xml","acceptanceDir":"tests/acceptance","harness":[]}}');
     symlinkSync(tmpFile, join(repo.root, 'workflow.config.json'));
     expect(() => loadConfig(repo.root)).toThrow(/Symlinks are not allowed: workflow\.config\.json/);
   });
