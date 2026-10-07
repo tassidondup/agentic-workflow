@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { symlinkSync } from 'node:fs';
+import { rmSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseConfig } from '../src/config.js';
 import { sha256 } from '../src/hash.js';
-import { assertManifestCurrent, buildManifest, parseManifest } from '../src/manifest.js';
+import { assertManifestCurrent, buildManifest, manifestProblems, parseManifest } from '../src/manifest.js';
 import { makeRepo, type TestRepo } from './helpers/repo.js';
 
 let repo: TestRepo;
@@ -67,5 +67,60 @@ describe('assertManifestCurrent (Review Focus 3)', () => {
       .toThrow(/baseline\.json is stale or invalid: files under tests\/acceptance or test\.harness changed since the baseline ran; re-run wf baseline/);
     repo.write('tests/acceptance/a.test.ts', 'changed');
     expect(() => assertManifestCurrent(repo.root, config(), fresh)).toThrow(/stale or invalid/);
+  });
+});
+
+describe('manifestProblems (ADR 0001)', () => {
+  const cfg = config(['vitest.config.ts', 'absent.ts']);
+  const scope = (staged: string[] = [], retired: string[] = []) => ({ staged: new Set(staged), retired: new Set(retired) });
+  const atGate = () => {
+    repo = makeRepo({ 'tests/acceptance/old.test.ts': '// [LST-001] [LST-009]', 'vitest.config.ts': 'cfg' });
+    return buildManifest(repo.root, cfg);
+  };
+
+  it('passes when the live folder is the manifest plus staged files', () => {
+    const m = atGate();
+    repo.write('tests/acceptance/new.test.ts', 'staged');
+    expect(manifestProblems(repo.root, cfg, m, scope(['tests/acceptance/new.test.ts']))).toEqual([]);
+  });
+
+  it('flags a file nobody approved (a decoy inside the folder)', () => {
+    const m = atGate();
+    repo.write('tests/acceptance/decoy.test.ts', '// [LST-001]');
+    expect(manifestProblems(repo.root, cfg, m, scope())).toEqual([
+      'tests/acceptance/decoy.test.ts is not approved: it was not in tests/acceptance at the tests gate and this change does not stage it',
+    ]);
+  });
+
+  it('flags an edited older acceptance test unless this change staged it', () => {
+    const m = atGate();
+    repo.write('tests/acceptance/old.test.ts', '// loosened');
+    expect(manifestProblems(repo.root, cfg, m, scope())).toEqual(['tests/acceptance/old.test.ts changed since the tests gate']);
+    expect(manifestProblems(repo.root, cfg, m, scope(['tests/acceptance/old.test.ts']))).toEqual([]);
+  });
+
+  it('allows deleting an acceptance file only when all its rows are retired', () => {
+    const m = atGate();
+    rmSync(join(repo.root, 'tests', 'acceptance', 'old.test.ts'));
+    expect(manifestProblems(repo.root, cfg, m, scope())).toEqual([
+      'tests/acceptance/old.test.ts was deleted, but its rows LST-001, LST-009 are not retired',
+    ]);
+    expect(manifestProblems(repo.root, cfg, m, scope([], ['LST-001']))).toEqual([
+      'tests/acceptance/old.test.ts was deleted, but its rows LST-009 are not retired',
+    ]);
+    expect(manifestProblems(repo.root, cfg, m, scope([], ['LST-001', 'LST-009']))).toEqual([]);
+  });
+
+  it('flags a harness file that changed, appeared or vanished, unless staged', () => {
+    const m = atGate();
+    repo.write('vitest.config.ts', "exclude: ['tests/acceptance/**']");
+    repo.write('absent.ts', 'new');
+    expect(manifestProblems(repo.root, cfg, m, scope())).toEqual([
+      'vitest.config.ts (test harness) changed since the tests gate',
+      'absent.ts (test harness) changed since the tests gate',
+    ]);
+    expect(manifestProblems(repo.root, cfg, m, scope(['vitest.config.ts', 'absent.ts']))).toEqual([]);
+    rmSync(join(repo.root, 'vitest.config.ts'));
+    expect(manifestProblems(repo.root, cfg, m, scope([], []))[0]).toBe('vitest.config.ts (test harness) changed since the tests gate');
   });
 });

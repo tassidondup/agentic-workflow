@@ -75,3 +75,37 @@ export function assertManifestCurrent(root: string, config: WorkflowConfig, mani
     );
   }
 }
+
+export interface ImplementationScope {
+  readonly staged: ReadonlySet<string>; // live paths this change's approved staging writes
+  readonly retired: ReadonlySet<string>;
+}
+
+function deletionProblems(manifest: Manifest, live: ReadonlySet<string>, scope: ImplementationScope): string[] {
+  return manifest.acceptance
+    .filter((e) => !live.has(e.path) && !scope.staged.has(e.path))
+    .flatMap((e) => {
+      const kept = e.rows.filter((r) => !scope.retired.has(r));
+      return kept.length === 0 ? [] : [`${e.path} was deleted, but its rows ${kept.join(', ')} are not retired`];
+    });
+}
+
+/**
+ * ADR 0001: outside this change's staging, the acceptance folder must equal the manifest (a file may
+ * be deleted only if all its rows are retired), and every harness path must still hash the same.
+ */
+export function manifestProblems(root: string, config: WorkflowConfig, manifest: Manifest, scope: ImplementationScope): string[] {
+  const dir = config.test.acceptanceDir;
+  const approved = new Map(manifest.acceptance.map((e) => [e.path, e.sha256]));
+  const live = listRepoFiles(root, dir).filter((p) => !scope.staged.has(p));
+  const unapproved = live
+    .filter((p) => !approved.has(p))
+    .map((p) => `${p} is not approved: it was not in ${dir} at the tests gate and this change does not stage it`);
+  const edited = live
+    .filter((p) => approved.has(p) && fileSha(root, p) !== approved.get(p))
+    .map((p) => `${p} changed since the tests gate`);
+  const harness = manifest.harness
+    .filter((h) => !scope.staged.has(h.path) && fileSha(root, h.path) !== h.sha256)
+    .map((h) => `${h.path} (test harness) changed since the tests gate`);
+  return [...unapproved, ...edited, ...deletionProblems(manifest, new Set(live), scope), ...harness];
+}
