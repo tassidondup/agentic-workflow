@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, s
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { checkStage, promote, stageCheck, stagedFiles } from '../src/stage.js';
-import { approveAll, changeFiles } from './helpers/change.js';
+import { CONFIG, approveAll, changeFiles } from './helpers/change.js';
 import { makeRepo, type TestRepo } from './helpers/repo.js';
 
 let repo: TestRepo;
@@ -134,5 +134,19 @@ describe('staging', () => {
     chmodSync(join(repo.root, C, 'design', 'stage', 'scripts', 'run.sh'), 0o755);
     promote(repo.root, 'c1', 'design');
     expect(statSync(join(repo.root, 'scripts', 'run.sh')).mode & 0o777).toBe(0o755);
+  });
+
+  it('stageCheck covers the whole acceptance folder and the test settings once the tests gate is valid (ADR 0001)', () => {
+    repo = makeRepo(changeFiles());
+    approveAll(repo);
+    promote(repo.root, 'c1', 'tests');
+    expect(stageCheck(repo.root, 'c1')).toEqual([]);
+    repo.write('tests/acceptance/decoy.test.ts', '// [LST-001]');
+    expect(stageCheck(repo.root, 'c1')).toEqual([
+      'tests/acceptance/decoy.test.ts is not approved: it was not in tests/acceptance at the tests gate and this change does not stage it',
+    ]);
+    rmSync(join(repo.root, 'tests', 'acceptance', 'decoy.test.ts'));
+    repo.write('workflow.config.json', CONFIG.replace('"tests/acceptance"', '"src"'));
+    expect(stageCheck(repo.root, 'c1')).toEqual([expect.stringMatching(/baseline\.json is stale or invalid: .*inputs_sha256 mismatch/)]);
   });
 });

@@ -1,5 +1,8 @@
-import { assertChangeExists } from './change.js';
+import { validateBaseline } from './baseline-file.js';
+import { assertChangeExists, readRetires } from './change.js';
+import { loadConfig } from './config.js';
 import { checkGate } from './gate-check.js';
+import { manifestProblems } from './manifest.js';
 import { changeRepoDir } from './paths.js';
 import { hashRepoFile, listRepoFiles, lstatInRepo, readRepoFile, writeRepoFile } from './safe-fs.js';
 import { STAGE_GATES, type StageGate } from './types.js';
@@ -70,16 +73,31 @@ export function promote(root: string, id: string, gate: StageGate): string[] {
   return files.map((f) => f.livePath);
 }
 
+// Re-validating baseline.json catches test settings changed after the gate (inputs_sha256); the
+// manifest check catches decoys, edits and unretired deletions in the acceptance folder and harness.
+function acceptanceProblems(root: string, id: string): string[] {
+  try {
+    const manifest = validateBaseline(root, id);
+    const staged = new Set(STAGE_GATES.flatMap((g) => stagedFiles(root, id, g).map((f) => f.livePath)));
+    return manifestProblems(root, loadConfig(root), manifest, { staged, retired: readRetires(root, id) });
+  } catch (e) {
+    return [(e as Error).message];
+  }
+}
+
 /**
  * stage-check: the design and tests gates must always be valid (so deleting staging after
- * approval can't hide a loosened live file), and live files must equal their staged bytes.
+ * approval can't hide a loosened live file), live files must equal their staged bytes, and
+ * (once the tests gate is valid) the acceptance folder and harness must match the baseline manifest.
  */
 export function stageCheck(root: string, id: string): string[] {
   assertChangeExists(root, id);
-  return STAGE_GATES.flatMap((g) => {
-    const gate = checkGate(root, id, g);
-    const invalid = gate.status === 'valid' ? [] : [`${g} gate is ${gate.status}`];
+  const gates = STAGE_GATES.map((g) => ({ g, status: checkGate(root, id, g).status }));
+  const problems = gates.flatMap(({ g, status }) => {
+    const invalid = status === 'valid' ? [] : [`${g} gate is ${status}`];
     const mismatches = checkStage(root, id, g).map((m) => `${g}: ${m.livePath} is ${m.reason === 'missing' ? 'missing' : 'different from approved staging'}`);
     return [...invalid, ...mismatches];
   });
+  const testsValid = gates.some(({ g, status }) => g === 'tests' && status === 'valid');
+  return [...problems, ...(testsValid ? acceptanceProblems(root, id) : [])];
 }
