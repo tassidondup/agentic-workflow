@@ -2,13 +2,12 @@ import { join } from 'node:path';
 import { readJsonFile } from './change.js';
 import { coveredFiles } from './coverage.js';
 import { isObject } from './guards.js';
-import { canonicalJson } from './hash.js';
+import { canonicalJson, HEX64 } from './hash.js';
 import { assertSafeRepoPath, changeDir, changeRepoDir } from './paths.js';
 import { hashRepoFile, lstatInRepo, writeRepoFile } from './safe-fs.js';
 import { PREREQS, type ApprovalRecord, type Gate } from './types.js';
 import { TOOL_VERSION } from './version.js';
 
-const HEX64 = /^[0-9a-f]{64}$/;
 
 export const recordPath = (root: string, id: string, gate: Gate): string =>
   join(changeDir(root, id), 'approvals', `${gate}.json`);

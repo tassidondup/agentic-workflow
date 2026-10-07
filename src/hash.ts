@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 
+export const HEX64 = /^[0-9a-f]{64}$/;
+
 export const sha256 = (data: string | Uint8Array): string =>
   createHash('sha256').update(data).digest('hex');
 
