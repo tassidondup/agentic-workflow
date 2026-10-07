@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { computeBaseline, type BaselineInput } from '../src/baseline.js';
 import type { TestCase } from '../src/junit.js';
 
-const tc = (id: string, status: TestCase['status']): TestCase => ({ name: `[${id}]`, classname: 'c', status, rowIds: [id] });
+const tc = (id: string, status: TestCase['status']): TestCase => ({ name: `[${id}]`, classname: 'tests/acceptance/a.test.ts', file: 'tests/acceptance/a.test.ts', status, rowIds: [id] });
 const live = new Set(['LST-001']);
 const SHA = 'a'.repeat(64);
 const input = (changeRowIds: string[], cases: TestCase[], noBehaviourChange = false, retired: string[] = []): BaselineInput =>

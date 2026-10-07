@@ -1,5 +1,5 @@
 import type { TestCase } from './junit.js';
-import { rowOutcomes } from './trace.js';
+import { rowOutcomes } from './outcomes.js';
 
 export interface Baseline {
   readonly change: string;
