@@ -1,6 +1,6 @@
-# Agentic Workflow — Design v2.5
+# Agentic Workflow — Design v2.6
 
-Supersedes `2026-09-26-agentic-framework-design.md`. v2.1 added: the agent team model, a reordered lifecycle (contract before tests), the planning dial, test-dispute and harness ownership, and memory maturity, plus ideas from claudex-loop and OpenRig. v2.2 (from Codex reviews 3–4): approvals are hash-bound to you and **chained** (design → spec, tests → spec + design), and tests are **staged and locked by hash** with an approved baseline instead of merged early. That removes the row-state machine. v2.3 (2026-10-06): automated PR review is Codex cloud review, AI approvals never count, review instructions are protected, and Copilot is rejected for now (see *Automated PR review*). v2.4 (2026-10-07, ADR 0001, from dogfood run 1): rows count only from tests under `test.acceptanceDir`, and the baseline locks the whole acceptance folder plus the runner config, so a runner-config filter plus decoy tests no longer passes (see *Test staging, baseline and activation*). v2.5 (2026-10-07, ADR 0002): green CI is proof against reward hacking (T1) but only evidence against code built to defeat the measurement (T2); T2 is detected by a must-fail canary and an isolated CI test run (Plan 2), and prevented in projects that opt into black-box acceptance tests (see *Trust boundary*).
+Supersedes `2026-09-26-agentic-framework-design.md`. v2.1 added: the agent team model, a reordered lifecycle (contract before tests), the planning dial, test-dispute and harness ownership, and memory maturity, plus ideas from claudex-loop and OpenRig. v2.2 (from Codex reviews 3–4): approvals are hash-bound to you and **chained** (design → spec, tests → spec + design), and tests are **staged and locked by hash** with an approved baseline instead of merged early. That removes the row-state machine. v2.3 (2026-10-06): automated PR review is Codex cloud review, AI approvals never count, review instructions are protected, and Copilot is rejected for now (see *Automated PR review*). v2.4 (2026-10-07, ADR 0001, from dogfood run 1): rows count only from tests under `test.acceptanceDir`, and the baseline locks the whole acceptance folder plus the runner config, so a runner-config filter plus decoy tests no longer passes (see *Test staging, baseline and activation*). v2.5 (2026-10-07, ADR 0002): green CI is proof against reward hacking (T1) but only evidence against code built to defeat the measurement (T2); T2 is detected by a must-fail canary and an isolated CI test run (Plan 2), and prevented in projects that opt into black-box acceptance tests (see *Trust boundary*). v2.6 (2026-10-17, Spike S): builders run **one at a time** on one branch per change; parallel builders in separate worktrees are deferred until Spike S2 proves them safe (see *Workspaces*).
 
 ## Context
 The product is the **workflow**: how memory, decisions, specs, tests and a team of agents fit together. It gets installed into any TypeScript repo, greenfield or brownfield, with `npx <tool> init`.
@@ -50,7 +50,7 @@ tests/harness/                     fixtures, seeds, helpers, runner configs: LOC
 | backend-dev | per change | Claude, mid | `apps/api/**`, `packages/contracts/**` (impl only) | Builds against the approved contract, TDD |
 | frontend-dev | per change | Claude, mid | `apps/web/**` | Builds against the approved contract, TDD |
 | qa | per change | Claude wrapper → **Codex CLI** | `docs/changes/<id>/tests/**` (tests gate PR only) | Turns rows into acceptance tests and holdout cases; rules on test disputes |
-| integrator | per change | Claude, mid | merge commits only | Merges builder branches in order, runs `verify --full`, opens the PR |
+| integrator | per change | Claude, mid | none (read-only) | Runs `verify --full` on the change branch and opens the PR (builders work in sequence, so there's nothing to merge) |
 | reviewer | per PR | **Codex CLI**, fresh session | none (read-only) | Adversarial review; classifies each miss as CONTEXT-GAP or JUDGMENT-GAP |
 
 - **Role file** (`roles/<role>.md` frontmatter): `provider`, `model_tier`, `lifetime`, `owned_paths`, `may_message`, `inputs`, `outputs`, then the instructions in the body. `gen-roles` renders these into `.claude/agents/` and the Codex prompt templates, so each role is defined in one place.
@@ -87,8 +87,17 @@ Revisit if its announced CodeQL/ESLint integration ships and getting those resul
 
 **Measure in Trial 1:** for each reviewer, count findings no other reviewer caught, comments that were noise, and minutes you spent triaging. Drop any reviewer that rarely finds something new.
 
-### Workspaces
-Each builder works in its own git worktree and branch (`change/<id>/<role>`). The integrator merges them in order. **Caveat:** natively, a spawned agent is either a teammate or worktree-isolated, not both, so a builder creates or enters its worktree after spawning. *Unproven; the trial must confirm it.*
+### Workspaces (decided 2026-10-17, Spike S)
+**Builders run one at a time on one branch per change** (`change/<id>`), checked out in the normal repo folder; no worktrees. backend-dev builds and commits, then frontend-dev builds on top of that commit. Owned paths still apply per role. Read-only roles (orchestrator, reviewer) may run alongside a builder. The integrator has no merge to do; it runs `verify --full` and opens the PR.
+
+Why: Spike S (`docs/research/2026-10-17-spike-s.md`) showed that `EnterWorktree` from an in-process teammate re-scopes the **whole session**, lead and every teammate, to that worktree. So builders can't each enter their own. Hand-made worktrees work but need explicit `cd` in every command and a teammate→worktree registry for hooks. Running one builder at a time needs neither, and uses only behaviour the spike verified. The cost is speed: a backend + frontend change takes the sum of both builds, not the longer of the two.
+
+**Parallel builders are deferred**, not dropped. Spike S2 tests split-pane teammates (each its own process, so a worktree might stay local to it). If that works, parallel builders return as an opt-in for large changes, with a teammate→worktree registry for hooks.
+
+**Hook requirements from Spike S** (apply either way):
+- The installer sets `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`. On current models the task tools are off by default, and without them the TaskCreated and TaskCompleted gates never fire.
+- A blocking TaskCompleted hook needs a **loop guard**. It also fires when a teammate goes idle holding an open task, so a refusal wakes the teammate, which idles again (23 cycles in the spike). Refuse at most 3 times per task, then report to the orchestrator and stop blocking.
+- Hooks identify the agent by `teammate_name`/`agent_type` from the payload, never by `cwd`, which is the session's directory and is shared.
 
 ## Planning dial (replaces fixed lanes)
 | Level | When | What runs |
@@ -115,13 +124,13 @@ The test for going up a level is "would a wrong plan be expensive, hard to undo 
                passes = already-existing behaviour)
              → TESTS GATE PR (staged tests + baseline + approvals/tests.json) → you review tests AND baseline, merge
              staged tests are not live: nothing about main's test suite changes yet
-5 BUILD      backend-dev ∥ frontend-dev in worktrees, TDD against the staged tests (`wf promote <id> tests` into their worktree);
+5 BUILD      backend-dev → frontend-dev, one at a time on the change branch, TDD against the staged tests (`wf promote <id> tests`);
              Stop/TaskCompleted hooks run verify --fast
              TaskCreated hook refuses build tasks until `wf gate check <id> tests` passes on main (which implies spec + design)
              stuck 3× → Codex rescue → orchestrator → you
              locked test looks wrong → TEST DISPUTE (written reasoning) → qa amends → new TESTS GATE PR (re-approval)
              intent rests on a missing capability → mark PARTIAL, name the gap, create a follow-on change
-6 INTEGRATE  integrator merges in order → verify --full
+6 INTEGRATE  integrator runs verify --full on the change branch (no merge: builders worked in sequence)
 7 PR         IMPLEMENTATION PR = code + staged tests/contract/migration copied into live locations
              + deletion of any rows this change retires.
              CI: all gates valid (chained), live tests/harness/contract/migration byte-identical to approved staging,
@@ -129,7 +138,7 @@ The test for going up a level is "would a wrong plan be expensive, hard to undo 
 8 REVIEW     Codex reviewer (fresh) → you merge: code, its tests and any retirements land in ONE merge → archive;
              delta folded into the living spec; decisions audited
 ```
-The contract is fixed at stage 3, before any tests (stage 4) or parallel builds (stage 5). That's what makes splitting builders by layer workable.
+The contract is fixed at stage 3, before any tests (stage 4) or builds (stage 5). That's what makes splitting builders by layer workable, in sequence now and in parallel later.
 
 ## Gates and approval records
 A gate counts only if **you** approved **these exact bytes**. Both halves are checked mechanically.
@@ -283,14 +292,14 @@ Merging lands the code and its tests together. Main never holds a test without i
 OpenSpec's living specs, change deltas and archive match this layout. Trial hosting the lifecycle on an OpenSpec custom schema; fall back to our own format with the same layout.
 
 ## Open questions
-- Can teammates reliably work inside their own worktrees (hooks, relative paths)?
+- Spike S2: do split-pane teammates (one process each) keep `EnterWorktree` local, so parallel builders can return? Also untested in Spike S: whether the owned-path hook blocks an Edit, the Bash bypass, and Codex from a teammate.
 - Agent teams are experimental. What breaks on Claude Code updates, and what's the fallback (subagents plus file handoffs)?
 - Codex as a tool, not a peer: is a one-shot Codex QA enough, or does QA need a persistent Codex conversation?
 - Subscription limits with 4–5 concurrent roles; whether to cap parallel builders at 2.
 - Tool and package name; how change IDs are generated; whether the managed-block upgrade survives hand edits.
 
 ## Validation
-1. **Trial 1:** one P1 change through the full team (orchestrator, db-designer, backend-dev ∥ frontend-dev, qa/Codex, integrator, reviewer/Codex).
+1. **Trial 1:** one P1 change through the full team (orchestrator, db-designer, backend-dev → frontend-dev, qa/Codex, integrator, reviewer/Codex).
 2. Greenfield pilot: 3 changes. Then one existing TS repo: 3 changes, including MAP.
 3. **Adversarial trials:** every gate must fail on a planted fault (a seeded-regression pair). A gate that passes on the planted fault doesn't count. These must include:
    - a correct implementation goes green and merges, with code and tests landing together;
