@@ -96,7 +96,7 @@ Why: Spike S (`docs/research/2026-10-17-spike-s.md`) showed that `EnterWorktree`
 
 **Hook requirements from Spike S** (apply either way):
 - The installer sets `CLAUDE_CODE_ENABLE_TODO_TOOLS=1`. On current models the task tools are off by default, and without them the TaskCreated and TaskCompleted gates never fire.
-- A blocking TaskCompleted hook needs a **loop guard**. It also fires when a teammate goes idle holding an open task, so a refusal wakes the teammate, which idles again (23 cycles in the spike). Refuse at most 3 times per task, then report to the orchestrator and stop blocking.
+- A blocking TaskCompleted hook needs a **loop guard**. It also fires when a teammate goes idle holding an open task, so a refusal wakes the teammate, which idles again (24 cycles in the spike). Refuse at most 3 times per task, then report to the orchestrator and stop blocking.
 - Hooks identify the agent by `teammate_name`/`agent_type` from the payload, never by `cwd`, which is the session's directory and is shared.
 
 ## Planning dial (replaces fixed lanes)
