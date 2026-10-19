@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
 
@@ -22,12 +23,14 @@ interface Job extends Obj {
 }
 interface Workflow extends Obj {
   on: unknown;
+  defaults: unknown;
   permissions: Record<string, string>;
   env: Record<string, string>;
   jobs: Record<string, Job>;
 }
 
-const REPORT = '.wf-report/junit.xml';
+const REPORT = '.wf-report/junit.xml'; // relative to the job's working directory (the PR checkout)
+const ARTIFACT_DIR = 'pr/.wf-report'; // the same folder relative to the workspace, for upload/download
 const WORKFLOW_TEXT = read('ci/wf.yml');
 const wf = parse(WORKFLOW_TEXT) as Workflow;
 const jobs = Object.entries(wf.jobs);
@@ -52,6 +55,17 @@ describe('ci/wf.yml', () => {
     // Breaks if pull_request_target, push or any other trigger is added, or pull_request is dropped.
     const triggers = typeof wf.on === 'string' ? [wf.on] : Object.keys(wf.on as Obj);
     expect(triggers).toEqual(['pull_request']);
+  });
+
+  it('re-runs when a PR is retargeted', () => {
+    // Breaks if "edited" (fires on base-branch change) or any other default activity type is dropped.
+    const types = ((wf.on as Obj).pull_request as { types?: string[] } | null)?.types;
+    expect([...(types ?? [])].sort()).toEqual(['edited', 'opened', 'reopened', 'synchronize']);
+  });
+
+  it('every job has a timeout (30 minutes for verify, 10 for the rest)', () => {
+    // Breaks if a job loses timeout-minutes or the limits are loosened.
+    for (const [name, job] of jobs) expect(job['timeout-minutes'], name).toBe(name === 'verify' ? 30 : 10);
   });
 
   it('token is read-only by default and only gate-check may read pull requests', () => {
@@ -86,10 +100,31 @@ describe('ci/wf.yml', () => {
     for (const r of runs) expect(r).not.toContain('${{');
   });
 
-  it('expressions appear only in env: and with: values', () => {
-    // Breaks if an expression moves into run, if, name or any other position.
-    const bad = leaves(wf).filter(([path, v]) => v.includes('${{') && !/(^|\.)(env|with)\.[^.]+$/.test(path));
-    expect(bad).toEqual([]);
+  it('expressions and secrets appear only where allowlisted', () => {
+    // Breaks if any ${{ }} appears outside its allowlisted path: e.g. a step-level GH_TOKEN in verify,
+    // `with: token: ${{ secrets.PAT }}` on a checkout, a secret in env, or a github.token anywhere but gate-check.
+    expect(WORKFLOW_TEXT).not.toContain('secrets.');
+    const ALLOWED: Array<{ path: RegExp; exprs: string[] }> = [
+      {
+        path: /^jobs\.[^.]+\.env\.(HEAD_REF|BASE_REF|BASE_SHA|REPO)$/,
+        exprs: ['github.head_ref', 'github.base_ref', 'github.event.pull_request.base.sha', 'github.repository'],
+      },
+      { path: /^jobs\.[^.]+\.steps\[\d+\]\.with\.ref$/, exprs: ['github.event.pull_request.base.sha'] },
+      { path: /^jobs\.gate-check\.env\.GH_TOKEN$/, exprs: ['github.token'] },
+      { path: /^jobs\.[^.]+\.steps\[\d+\]\.env\.CHANGE$/, exprs: ['steps.classify.outputs.change'] },
+    ];
+    let seen = 0;
+    for (const [path, value] of leaves(wf)) {
+      for (const m of value.matchAll(/\$\{\{\s*(.*?)\s*\}\}/g)) {
+        seen += 1;
+        const expr = m[1] ?? '';
+        const ok = ALLOWED.some((a) => a.path.test(path) && a.exprs.includes(expr));
+        expect(ok, `${path}: ${expr}`).toBe(true);
+      }
+    }
+    // Expressions hiding in keys or anywhere the leaf walk misses would make the counts differ.
+    expect(WORKFLOW_TEXT.split('${{').length - 1).toBe(seen);
+    expect(seen).toBeGreaterThan(0);
   });
 
   it('untrusted refs enter only through env and are quoted in scripts', () => {
@@ -109,8 +144,6 @@ describe('ci/wf.yml', () => {
         }
       }
     }
-    const refs = leaves(wf).filter(([, v]) => /head_ref|base_ref|\.head\.|\.title|\.body/.test(v));
-    for (const [path] of refs) expect(path).toMatch(/\.env\.(HEAD_REF|BASE_REF)$/);
   });
 
   it('every checkout sets persist-credentials: false and the PR checkout is full-depth', () => {
@@ -120,21 +153,33 @@ describe('ci/wf.yml', () => {
       expect(checkouts, name).toHaveLength(2);
       for (const c of checkouts) expect(c.with?.['persist-credentials'], name).toBe(false);
       const [pr, trusted] = checkouts;
+      expect(pr?.with?.path, name).toBe('pr');
       expect(pr?.with?.['fetch-depth'], name).toBe(0);
       expect(pr?.with?.ref, name).toBeUndefined();
       expect(trusted?.with?.ref, name).toBe('${{ github.event.pull_request.base.sha }}');
-      expect(trusted?.with?.path, name).toBe('.wf-trusted');
+      expect(trusted?.with?.path, name).toBe('trusted');
     }
     const depthLines = WORKFLOW_TEXT.split('\n').filter((l) => l.includes('fetch-depth'));
     expect(depthLines).toHaveLength(jobs.length);
     for (const l of depthLines) expect(l).toMatch(/fetch-depth: 0 +# .*shallow/i);
   });
 
-  it('wf is invoked from .wf-trusted, never from the workspace root', () => {
-    // Breaks if WF points outside .wf-trusted, or a step runs node/npx/a workspace path directly.
-    expect(wf.env.WF).toMatch(/^node \.wf-trusted\/\S+$/);
+  it('wf runs from a trusted checkout that is a sibling of the PR checkout, never inside it', () => {
+    // Breaks if WF points into the PR tree (or a path under it), if the trusted checkout moves inside the PR
+    // checkout (bare imports would then resolve through the PR's node_modules and vitest would find its tests),
+    // if the working directory is not the PR checkout, or if a step runs node/npx/a workspace path directly.
+    expect(wf.defaults).toEqual({ run: { 'working-directory': 'pr' } });
+    const match = /^node (\S+)$/.exec(wf.env.WF ?? '');
+    expect(match).not.toBeNull();
+    const target = posix.normalize(posix.join('pr', match?.[1] ?? ''));
+    expect(target.startsWith('trusted/'), `WF resolves to ${target}`).toBe(true);
+    expect(target.startsWith('pr/')).toBe(false);
     expect(Object.keys(wf.env)).toEqual(['WF']);
     for (const [name, job] of jobs) {
+      const [prDir, trustedDir] = job.steps.filter((s) => s.uses?.startsWith('actions/checkout@')).map((s) => String(s.with?.path));
+      expect(prDir, name).toBe('pr');
+      expect(trustedDir, name).toBe('trusted');
+      expect(trustedDir?.startsWith(`${prDir}/`), name).toBe(false);
       const runs = job.steps.map((s) => s.run ?? '').filter((r) => r !== '');
       expect(runs.some((r) => r.includes('$WF ')), name).toBe(true);
       for (const r of runs) {
@@ -142,6 +187,8 @@ describe('ci/wf.yml', () => {
         expect(r, name).not.toMatch(/dist\/bin\.js|\.workflow\/|\.\/wf/);
       }
     }
+    expect(WORKFLOW_TEXT).toMatch(/self-contained bundle/);
+    expect(WORKFLOW_TEXT.split('\n').slice(0, 12).join('\n')).toMatch(/CODEOWNERS review of \/\.github\//);
   });
 
   it('verify needs stage-check and trace-check needs verify', () => {
@@ -193,23 +240,25 @@ describe('ci/wf.yml', () => {
     expect(tests.if).toBeUndefined();
     const upload = stepNamed('verify', (s) => s.uses?.startsWith('actions/upload-artifact@') === true);
     expect(upload.if).toBeUndefined();
-    expect(upload.with).toMatchObject({ name: 'junit-report', path: REPORT });
+    expect(upload.with).toMatchObject({ name: 'junit-report', path: `pr/${REPORT}` });
     for (const { step } of allSteps) expect(step.if ?? '').not.toMatch(/always|failure|cancelled/);
     const order = wf.jobs.verify?.steps ?? [];
     expect(order.indexOf(upload)).toBeGreaterThan(order.indexOf(tests));
   });
 
-  it('trace-check downloads the junit-report artifact into .wf-report', () => {
+  it('trace-check downloads the junit-report artifact into the PR checkout .wf-report', () => {
     const dl = stepNamed('trace-check', (s) => s.uses?.startsWith('actions/download-artifact@') === true);
     expect(dl.if).toBe("steps.classify.outputs.kind == 'change'");
-    expect(dl.with).toMatchObject({ name: 'junit-report', path: '.wf-report' });
+    expect(dl.with).toMatchObject({ name: 'junit-report', path: ARTIFACT_DIR });
   });
 
-  it('every job runs on ubuntu-latest with node 24', () => {
+  it('every job runs on ubuntu-latest with node 24 and no npm cache', () => {
     for (const [name, job] of jobs) {
       expect(job['runs-on'], name).toBe('ubuntu-latest');
       const node = job.steps.find((s) => s.uses?.startsWith('actions/setup-node@'));
       expect(node?.with?.['node-version'], name).toBe(24);
+      // Breaks if npm caching (auto-enabled by setup-node from the PR-controlled package.json) is turned back on.
+      expect(node?.with?.['package-manager-cache'], name).toBe(false);
     }
   });
 });
