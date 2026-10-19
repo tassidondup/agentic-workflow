@@ -6,7 +6,7 @@ This repo is the **framework itself**, not an app. Don't bake any app's stack ch
 
 ## Status
 Plan 1 (the `wf` core gate engine, `src/`) is merged: `docs/superpowers/plans/2026-10-05-wf-core-gate-engine.md`. ADR 0001 (decoy-test fix) is implemented.
-- **Plan 2a, GitHub enforcement, is built** (`docs/superpowers/plans/2026-10-18-plan-2a-github-enforcement.md`): `wf classify`, `pr-check` (provenance, gate-PR scope) and `run-tests`; `templates/ci/wf.yml`, `templates/CODEOWNERS`, `templates/ruleset.json`; setup guide `docs/guides/github-setup.md`. **Live GitHub verification is pending** (guide section 7, needs a bot account).
+- **Plan 2a, GitHub enforcement, is built** (`docs/superpowers/plans/2026-10-18-plan-2a-github-enforcement.md`): `wf classify`, `pr-check` (provenance, gate-PR scope) and `run-tests`; `templates/ci/wf.yml`, `templates/CODEOWNERS`, `templates/ruleset.json`; setup guide `docs/guides/github-setup.md`. **Classification is default-deny (design v2.8):** a PR that is not a gate PR or on a `change/<id>` branch must have every path in the base config's `exempt` list, outside the never-exempt floor. **Live GitHub verification is pending** (guide section 7, needs a bot account).
 
 Next, in order:
 - **Plan 2b, test isolation (ADR 0002 layers 1–2):** `wf canary write`, `trace-check --canary`, `test.canary` config and the vitest template, and running the test command in `docker run --rm --network none` with the report read after the container exits. Builds on 2a's CI template.
