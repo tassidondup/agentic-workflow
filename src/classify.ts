@@ -1,8 +1,10 @@
+import { nonExempt, type ExemptPolicy } from './exempt.js';
 import type { ChangedFile } from './git.js';
 import { isChangeId } from './paths.js';
 import { GATES, type Gate } from './types.js';
 
-export type PrKind = 'gate' | 'change' | 'other';
+/** `rejected` always carries problems. `exempt` is the only kind that gets no wf checks. */
+export type PrKind = 'gate' | 'change' | 'exempt' | 'rejected';
 
 export interface Classification {
   readonly kind: PrKind;
@@ -18,6 +20,7 @@ interface RecordRef {
 
 const RECORD = /^docs\/changes\/([^/]+)\/approvals\/([a-z]+)\.json$/;
 const CHANGE_BRANCH = 'change/';
+const MAX_LISTED = 10;
 
 const done = (kind: PrKind, change: string | null, gate: Gate | null, problems: readonly string[]): Classification =>
   Object.freeze({ kind, change, gate, problems: Object.freeze([...new Set(problems)]) });
@@ -51,13 +54,26 @@ function gateProblems(records: readonly RecordRef[], files: readonly ChangedFile
   return problems;
 }
 
-/** Classifies a PR from its changed files and head branch. Pure: both inputs are untrusted data. */
-export function classifyPr(files: readonly ChangedFile[], headBranch: string): Classification {
+function rejectedProblems(bad: readonly ChangedFile[]): string[] {
+  const listed = bad.slice(0, MAX_LISTED).map((f) => `${f.path} is not exempt, and this PR is neither a gate PR nor on a change/<id> branch`);
+  return bad.length > MAX_LISTED ? [...listed, `and ${bad.length - MAX_LISTED} more paths that are not exempt`] : listed;
+}
+
+/**
+ * Classifies a PR from its changed files and head branch. Pure: both inputs are untrusted data.
+ * The diff decides; the branch name can only add constraints, never grant a pass (D7).
+ * `getPolicy` is called only when the PR is neither a gate PR nor on a `change/` branch, so it may throw.
+ */
+export function classifyPr(files: readonly ChangedFile[], headBranch: string, getPolicy: () => ExemptPolicy): Classification {
   const records = files.map(asRecord).filter((r): r is RecordRef => r !== null);
   const [first] = records;
   if (first !== undefined) return done('gate', first.change, first.gate, gateProblems(records, files, headBranch));
-  if (!headBranch.startsWith(CHANGE_BRANCH)) return done('other', null, null, []);
-  const id = headBranch.slice(CHANGE_BRANCH.length);
-  if (isChangeId(id)) return done('change', id, null, []);
-  return done('other', null, null, [`branch ${headBranch} is not a valid change id`]);
+  if (headBranch.startsWith(CHANGE_BRANCH)) {
+    const id = headBranch.slice(CHANGE_BRANCH.length);
+    if (isChangeId(id)) return done('change', id, null, []);
+    return done('rejected', null, null, [`branch ${headBranch} is not a valid change id`]);
+  }
+  const bad = nonExempt(files, getPolicy());
+  if (bad.length === 0) return done('exempt', null, null, []);
+  return done('rejected', null, null, rejectedProblems(bad));
 }
