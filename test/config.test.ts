@@ -55,6 +55,34 @@ describe('parseConfig', () => {
   });
 });
 
+describe('parseConfig: exempt', () => {
+  it('defaults to nothing exempt', () => {
+    const c = parseConfig(good);
+    expect(c.exempt).toEqual([]);
+    expect(Object.isFrozen(c.exempt)).toBe(true);
+  });
+  it('accepts folders and single files, drops a trailing slash and duplicates', () => {
+    expect(parseConfig({ ...good, exempt: ['README.md', 'docs/guides/', 'docs/guides'] }).exempt).toEqual(['README.md', 'docs/guides']);
+  });
+  it('allows a folder that merely contains a protected one: the floor still wins per file', () => {
+    expect(parseConfig({ ...good, exempt: ['docs'] }).exempt).toEqual(['docs']);
+  });
+  it.each([
+    ['not a list', 'docs', /"exempt" must be a list of repo paths/],
+    ['a non-string entry', [5], /"exempt\[0\]" must be a repo-relative path/],
+    ['an unsafe entry', ['README.md', '../x'], /"exempt\[1\]" is not a safe repo path/],
+    ['an absolute entry', ['/etc'], /"exempt\[0\]" is not a safe repo path/],
+    ['the workflow folder', ['.github'], /"exempt\[0\]" \(\.github\) is a protected path/],
+    ['inside a protected folder', ['docs/specs/notes'], /protected path/],
+    ['the same folder in other case', ['.GitHub/workflows'], /protected path/],
+    ['a package.json at any depth', ['packages/a/package.json'], /protected path/],
+    ['the acceptance folder from this config', ['tests/acceptance'], /protected path/],
+    ['a harness file from this config', ['vitest.config.ts'], /protected path/],
+  ])('rejects %s', (_name, exempt, message) => {
+    expect(() => parseConfig({ ...good, exempt })).toThrow(message);
+  });
+});
+
 describe('loadConfig', () => {
   it('names the file when JSON is truncated (Review Focus 2)', () => {
     repo = makeRepo({ 'workflow.config.json': '{"approvers": [' });
