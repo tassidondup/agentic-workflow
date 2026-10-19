@@ -1,8 +1,8 @@
 import { classifyPr, type Classification } from './classify.js';
-import { loadConfig } from './config.js';
+import { CONFIG_FILE, parseConfig } from './config.js';
 import type { Exec } from './exec.js';
 import { checkGate } from './gate-check.js';
-import { changedFiles } from './git.js';
+import { changedFiles, fileAt } from './git.js';
 import { ghReader, type GitHubReader } from './github.js';
 import { provenanceProblems } from './provenance.js';
 import { GATES, PREREQS, type Gate, type GateResult } from './types.js';
@@ -41,6 +41,20 @@ function statusProblems(results: readonly GateResult[]): string[] {
   });
 }
 
+/**
+ * Approvers are deliberately read from the BASE commit, never the PR head: a PR must not be able to
+ * add itself (or a bot) to the list that vouches for the records it relies on.
+ */
+function baseApprovers(root: string, base: string, exec: Exec): { approvers: readonly string[] } | { problem: string } {
+  const text = fileAt(root, base, CONFIG_FILE, exec);
+  if (text === null) return { problem: `${CONFIG_FILE} is not on ${base}; approvers must come from the base branch` };
+  try {
+    return { approvers: parseConfig(JSON.parse(text) as unknown).approvers };
+  } catch (e) {
+    return { problem: `${CONFIG_FILE} on ${base} is unusable for approvers: ${(e as Error).message}` };
+  }
+}
+
 const withProblems = (c: Classification, extra: readonly string[]): Classification =>
   Object.freeze({ ...c, problems: Object.freeze([...new Set([...c.problems, ...extra])]) });
 
@@ -56,14 +70,13 @@ export function prCheck(root: string, input: PrCheckInput, exec: Exec, gh?: GitH
   if (plan === null) return classified;
   const problems = statusProblems(plan.check.map((gate) => checkGate(root, plan.id, gate)));
   if (plan.prove.length > 0) {
-    const provenance = {
-      id: plan.id,
-      gates: plan.prove,
-      base: input.base,
-      baseBranch: input.baseBranch,
-      approvers: loadConfig(root).approvers,
-    };
-    problems.push(...provenanceProblems(root, provenance, gh ?? ghReader(input.repo, root, exec), exec));
+    const found = baseApprovers(root, input.base, exec);
+    if ('problem' in found) {
+      problems.push(found.problem);
+    } else {
+      const provenance = { id: plan.id, gates: plan.prove, base: input.base, baseBranch: input.baseBranch, approvers: found.approvers };
+      problems.push(...provenanceProblems(root, provenance, gh ?? ghReader(input.repo, root, exec), exec));
+    }
   }
   return withProblems(classified, problems);
 }
