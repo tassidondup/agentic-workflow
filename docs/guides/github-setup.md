@@ -37,7 +37,7 @@ Agents push branches and open PRs as a **separate GitHub account** (the bot). Yo
 
 A GitHub App installation token is a third route; it is not designed or checked here.
 
-**What the bot can still do, either option.** Merging a PR through the API needs only Contents (write) (*verified 2026-10-19, same permissions page*), which the bot needs to push. So the bot cannot merge a PR the ruleset blocks, but **can merge a PR after you approve it**. For approval records, provenance rejects that (the record must be merged by an approver). For other PRs nothing in the templates stops it, so merge yourself right after approving. See *Known limits* in the design doc.
+**What the bot can still do, either option.** Merging a PR through the API needs only Contents (write) (*verified 2026-10-19, same permissions page*), which the bot needs to push. So the bot cannot merge a PR the ruleset blocks, but **can merge a PR after you approve it**. For approval records, provenance rejects that (the record must be merged by an approver). For implementation and exempt PRs nothing in the templates stops it, so merge yourself right after approving. See *Known limits* in the design doc.
 
 Store the token where only the agents' runtime reads it (for example `GH_TOKEN` in the agent session's environment). Never commit it, never put it in a repo secret, and never paste it into a prompt.
 
@@ -56,7 +56,7 @@ Until the installer exists (Plan 3), by hand:
 
 **No other workflow may define jobs named `gate-check`, `stage-check`, `verify`, `trace-check` or `memory-check`.** Required checks match by name, so a job with one of those names on the same SHA could satisfy the requirement.
 
-**Keep all five checks required.** `verify` needs `stage-check` and `trace-check` needs `verify`. A job skipped because the job it needs failed "will report its status as Success" and "will not prevent a pull request from merging, even if it is a required check" (*verified 2026-10-19: docs.github.com/en/pull-requests/reference/status-checks*). The PR is still blocked only because the failed job is itself required. The same applies to steps the workflow skips on purpose: `stage-check` and `trace-check` only do real work on implementation PRs and pass on gate and `other` PRs.
+**Keep all five checks required.** `verify` needs `stage-check` and `trace-check` needs `verify`. A job skipped because the job it needs failed "will report its status as Success" and "will not prevent a pull request from merging, even if it is a required check" (*verified 2026-10-19: docs.github.com/en/pull-requests/reference/status-checks*). The PR is still blocked only because the failed job is itself required. The same applies to steps the workflow skips on purpose: `stage-check` and `trace-check` only do real work on implementation PRs and pass on gate and `exempt` PRs.
 
 GitHub reads CODEOWNERS from the PR's **base** branch (*verified 2026-10-19, about-code-owners page*), so the install PR is not yet protected by the file it adds.
 
@@ -73,13 +73,25 @@ Every job runs `node ../trusted/.workflow/wf/bin.js`, where `trusted/` is a chec
 
 Approvers come from `workflow.config.json` **at the base commit**, never from the PR (a PR can't add itself or the bot to the list that vouches for its records). A design or tests gate PR, or an implementation PR, whose base has no usable `workflow.config.json` fails `gate-check` with "workflow.config.json is not on <base>; approvers must come from the base branch". After the install PR is merged the base has it. To add an approver, merge a PR changing `approvers` first; it counts from the next PR.
 
+## 4a. Exempt paths
+Docs and tooling PRs have no change folder, so they would fail. List what they may touch in `workflow.config.json`:
+```json
+"exempt": ["README.md", "docs/guides"]
+```
+- Entries are repo paths (a folder or one file), no globs. The list is read from the **base** commit, so a PR cannot exempt its own files. Merge a change to it like any config change.
+- **Never list a source folder.** Anything exempt skips every gate. Start with an empty list and add paths when a PR is blocked that should not be.
+- These can never be exempt, whatever you list: `.github`, `.workflow`, `workflow.config.json`, `AGENTS.md`, `CLAUDE.md`, `roles`, `docs/specs`, `docs/decisions`, `docs/changes`, `tests/acceptance`, `tests/harness`, the `test.acceptanceDir` and `test.harness` paths, and anywhere: `package.json`, lockfiles, `vitest.config.*`, `vite.config.*`, `jest.config.*`. Listing one is a config error. Listing a folder that contains one (`docs`) is allowed; the protected part stays protected.
+- Dependency-update PRs (Dependabot, Renovate) touch `package.json` and lockfiles, so they need a `change/<id>` branch with approved gates. That is deliberate.
+
 ## 5. What provenance guarantees, and what it doesn't
 `wf pr-check` (the `gate-check` job) decides what kind of PR this is from its diff, then checks it.
 
 **PR kind (D4).**
 - **Gate PR:** adds or changes (git status A, M or T) a file `docs/changes/<id>/approvals/<spec|design|tests>.json`. It must hold exactly one record, and every changed path, including deletions, must be under `docs/changes/<id>/`. A head branch `change/<other-id>` is refused. This closes the ADR 0001 attack where a tests-gate PR also edits the runner config.
 - **Implementation PR:** no record, head branch `change/<id>` with a valid id.
-- **Other:** anything else. **`wf` checks nothing on it**, with one exception: a head branch `change/<invalid-id>` (for example `change/Bad_ID`) is classified `other` with a problem, and `classify` and `pr-check` fail. Only CODEOWNERS and the ruleset protect it. An agent can name an implementation branch anything and get `other`; your review of protected paths is the backstop. A P0 lane that closes this is out of scope for now.
+- **Exempt:** anything else, but only if **every** changed path is covered by an entry in `exempt` (section 4a) and by none of the never-exempt paths. `wf` checks nothing on it. A symlink or submodule anywhere in the diff makes the PR non-exempt.
+- **Rejected:** everything else fails `classify` and `pr-check` with one line per offending path. That includes an implementation change on a branch called `feat/x`: the branch name never grants a pass (D7). A head branch `change/<invalid-id>` (for example `change/Bad_ID`) is rejected too.
+- **Known gap, not closed:** an approved `change/<id>` can carry unrelated code (see *Known limits* in the design doc, *Laundering*).
 
 **Provenance (D1).** For each record the PR relies on (the prerequisites of a gate PR's gate; all three for an implementation PR), CI requires:
 1. the record is on the base commit and unchanged in this PR;
@@ -99,7 +111,7 @@ In plain words: a record counts only if one of your accounts merged its PR, and 
 
 **Deleting a record (D6)** is not a gate PR. Archiving a change deletes its records, and that flow isn't designed yet (Plan 4). Record deletions are code-owned and otherwise unchecked.
 
-**Not covered by provenance.** A `CHANGES_REQUESTED` from one approver does not cancel another approver's approval. Who merges an implementation or `other` PR is not checked.
+**Not covered by provenance.** A `CHANGES_REQUESTED` from one approver does not cancel another approver's approval. Who merges an implementation or `exempt` PR is not checked.
 
 ## 6. Solo developer: the review-count conflict
 GitHub does not let an author approve their own PR (*verified 2026-10-19: docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/approving-a-pull-request-with-required-reviews, "Pull request authors cannot approve their own pull requests"*). The shipped ruleset requires one approving review and code-owner review. So with one human approver, **a PR you author can never merge**.
