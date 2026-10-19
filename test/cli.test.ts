@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../src/cli.js';
+import type { Exec, ExecResult } from '../src/exec.js';
 import { approveAll, changeFiles } from './helpers/change.js';
 import { git, makeRepo, type TestRepo } from './helpers/repo.js';
 
@@ -227,6 +228,71 @@ describe('wf cli', () => {
       branchWith('docs-fix', { 'README.md': 'changed' });
       const r = cli('pr-check', '--base', 'main', '--base-branch', 'main', '--branch', 'docs-fix', '--repo', 'acme/app');
       expect(r).toEqual({ code: 0, out: 'kind=other', err: '' });
+    });
+  });
+
+  describe('run-tests', () => {
+    const CFG = JSON.stringify({
+      approvers: ['tassi'],
+      test: { command: ['t'], junitReport: 'reports/junit.xml', acceptanceDir: 'tests/acceptance', harness: [] },
+    });
+    function cliExec(reply: Partial<ExecResult>, argv: string[], onRun: () => void = () => {}): { code: number; out: string; err: string } {
+      const exec: Exec = () => {
+        onRun();
+        return { status: 0, stdout: '', stderr: '', ...reply };
+      };
+      const out: string[] = [];
+      const err: string[] = [];
+      const code = run(argv, { out: (s) => out.push(s), err: (s) => err.push(s), cwd: repo.root, exec });
+      return { code, out: out.join('\n'), err: err.join('\n') };
+    }
+
+    it('prints the runner output and exits 0 on success', () => {
+      repo = makeRepo({ 'workflow.config.json': CFG });
+      expect(cliExec({ stdout: '3 passed\n' }, ['run-tests'])).toEqual({ code: 0, out: '3 passed', err: '' });
+    });
+
+    it('exits 1 for any non-zero status and still prints the output', () => {
+      repo = makeRepo({ 'workflow.config.json': CFG });
+      const r = cliExec({ status: 7, stdout: 'FAIL\n' }, ['run-tests']);
+      expect(r).toMatchObject({ code: 1, out: 'FAIL' });
+    });
+
+    it('accepts --report-out and copies the report', () => {
+      repo = makeRepo({ 'workflow.config.json': CFG });
+      const r = cliExec({}, ['run-tests', '--report-out', '.wf-report/junit.xml'], () => repo.write('reports/junit.xml', '<x/>'));
+      expect(r.code).toBe(0);
+      expect(readFileSync(join(repo.root, '.wf-report/junit.xml'), 'utf8')).toBe('<x/>');
+    });
+
+    it('exits 2 when the report is missing', () => {
+      repo = makeRepo({ 'workflow.config.json': CFG });
+      const r = cliExec({}, ['run-tests', '--report-out', 'out.xml']);
+      expect(r.code).toBe(2);
+      expect(r.err).toMatch(/did not write reports\/junit\.xml/);
+    });
+
+    it('exits 2 for an unsafe --report-out without running the tests', () => {
+      repo = makeRepo({ 'workflow.config.json': CFG });
+      let ran = false;
+      const r = cliExec({}, ['run-tests', '--report-out', '../x'], () => { ran = true; });
+      expect(r.code).toBe(2);
+      expect(r.err).toMatch(/--report-out/);
+      expect(ran).toBe(false);
+    });
+
+    it('exits 2 on a bad config', () => {
+      repo = makeRepo({ 'workflow.config.json': '{}' });
+      expect(cliExec({}, ['run-tests']).code).toBe(2);
+    });
+
+    it('--report-out on another command exits 2; run-tests takes no positionals', () => {
+      repo = makeRepo();
+      const r = cli('spec-lint', 'c1', '--report-out', 'x.xml');
+      expect(r.code).toBe(2);
+      expect(r.err).toMatch(/--report-out is only for run-tests/);
+      expect(cli('run-tests', 'extra').code).toBe(2);
+      expect(cli('run-tests', '--report', 'r.xml').err).toMatch(/--report is only for trace-check/);
     });
   });
 });

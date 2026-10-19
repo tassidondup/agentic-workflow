@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { approve } from './approve.js';
 import { runClassify, runPrCheck, type PrFlags } from './cli-pr.js';
+import { runRunTests, type RunFlags } from './cli-run.js';
 import type { Exec } from './exec.js';
 import { checkAll, checkGate } from './gate-check.js';
 import { parseJUnit } from './junit.js';
@@ -34,7 +35,8 @@ const USAGE = `Usage: wf <command> [args] [--root <dir>]
   classify --base <ref> --branch <name>
                                        print kind=, change=, gate= for a PR (stdout is GITHUB_OUTPUT-safe)
   pr-check --base <ref> --base-branch <name> --branch <name> --repo <owner/name>
-                                       classify a PR, check its gates and that its records were merged by an approver`;
+                                       classify a PR, check its gates and that its records were merged by an approver
+  run-tests [--report-out <path>]      run test.setup and test.command; --report-out copies the JUnit report to a repo path`;
 
 const asGate = (g: string | undefined): Gate => {
   if (!GATES.includes(g as Gate)) throw new UsageError('gate must be one of spec, design, tests');
@@ -72,13 +74,15 @@ const ARITY: Readonly<Record<string, number>> = {
   'memory-check': 0,
   classify: 0,
   'pr-check': 0,
+  'run-tests': 0,
 };
 
-type Flags = PrFlags & Readonly<{ report?: string }>;
+type Flags = PrFlags & RunFlags & Readonly<{ report?: string }>;
 
 /** Which commands each flag belongs to. A flag on any other command is a usage error. */
 const FLAG_COMMANDS: Readonly<Record<keyof Flags, readonly string[]>> = {
   report: ['trace-check'],
+  'report-out': ['run-tests'],
   base: ['classify', 'pr-check'],
   'base-branch': ['pr-check'],
   branch: ['classify', 'pr-check'],
@@ -137,6 +141,8 @@ function dispatch(cmd: string | undefined, pos: readonly string[], root: string,
       return runClassify(root, flags, io);
     case 'pr-check':
       return runPrCheck(root, flags, io);
+    case 'run-tests':
+      return runRunTests(root, flags, io);
     default:
       throw new UsageError(cmd ? `Unknown command: ${cmd}` : 'Missing command');
   }
@@ -151,6 +157,7 @@ export function run(argv: readonly string[], io: Io): number {
       options: {
         root: { type: 'string' },
         report: { type: 'string' },
+        'report-out': { type: 'string' },
         base: { type: 'string' },
         'base-branch': { type: 'string' },
         branch: { type: 'string' },
