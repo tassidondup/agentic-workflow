@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../src/cli.js';
 import { approveAll, changeFiles } from './helpers/change.js';
-import { makeRepo, type TestRepo } from './helpers/repo.js';
+import { git, makeRepo, type TestRepo } from './helpers/repo.js';
 
 let repo: TestRepo;
 afterEach(() => repo?.cleanup());
@@ -131,5 +131,84 @@ describe('wf cli', () => {
     const t = cli('trace-check', 'c1', '--report', 'reports/hosts');
     expect(t.code).toBe(2);
     expect(t.err).toMatch(/Symlinks are not allowed: reports/);
+  });
+
+  describe('classify and pr-check', () => {
+    /** A git repo with main committed, then a branch that adds `files`. */
+    function branchWith(branch: string, files: Record<string, string>): void {
+      repo?.cleanup();
+      repo = makeRepo({ 'README.md': 'hi' });
+      git(repo.root, 'init', '-b', 'main');
+      git(repo.root, 'add', '-A');
+      git(repo.root, 'commit', '-m', 'init');
+      git(repo.root, 'checkout', '-b', branch);
+      Object.entries(files).forEach(([p, c]) => repo.write(p, c));
+      git(repo.root, 'add', '-A');
+      git(repo.root, 'commit', '-m', 'work');
+    }
+    const strayGate = { [`${C}/approvals/spec.json`]: '{}', 'stray.txt': 'x' };
+
+    it('classify prints only key=value lines on stdout and problems on stderr', () => {
+      branchWith('change/c1', { 'src/a.ts': 'x' });
+      const ok = cli('classify', '--base', 'main', '--branch', 'change/c1');
+      expect(ok).toEqual({ code: 0, out: 'kind=change\nchange=c1', err: '' });
+      branchWith('gate/c1-spec', strayGate);
+      const bad = cli('classify', '--base', 'main', '--branch', 'gate/c1-spec');
+      expect(bad.code).toBe(1);
+      expect(bad.out).toBe('');
+      expect(bad.err).toBe('- stray.txt is outside docs/changes/c1/');
+    });
+
+    it('classify prints the gate for a gate PR', () => {
+      branchWith('gate/c1-spec', { [`${C}/approvals/spec.json`]: '{}' });
+      expect(cli('classify', '--base', 'main', '--branch', 'gate/c1-spec').out).toBe('kind=gate\nchange=c1\ngate=spec');
+    });
+
+    it('classify exits 2 without --branch or --base', () => {
+      branchWith('change/c1', { 'src/a.ts': 'x' });
+      const noBranch = cli('classify', '--base', 'main');
+      expect(noBranch.code).toBe(2);
+      expect(noBranch.err).toMatch(/--branch/);
+      expect(noBranch.out).toBe('');
+      expect(cli('classify', '--branch', 'change/c1').err).toMatch(/--base/);
+    });
+
+    it('--base with an option-like value exits 2', () => {
+      branchWith('change/c1', { 'src/a.ts': 'x' });
+      const attached = cli('classify', '--base=--output=/tmp/x', '--branch', 'change/c1');
+      expect(attached.code).toBe(2);
+      expect(attached.err).toMatch(/Unsafe git ref/);
+      expect(cli('classify', '--base', '--output=/tmp/x', '--branch', 'change/c1').code).toBe(2);
+    });
+
+    it('a flag on a command that does not take it exits 2', () => {
+      repo = makeRepo();
+      const repoFlag = cli('spec-lint', 'c1', '--repo', 'a/b');
+      expect(repoFlag.code).toBe(2);
+      expect(repoFlag.err).toMatch(/--repo is only for pr-check/);
+      expect(cli('classify', '--base', 'main', '--branch', 'b', '--repo', 'a/b').code).toBe(2);
+      expect(cli('classify', '--base', 'main', '--branch', 'b', '--base-branch', 'main').code).toBe(2);
+      expect(cli('pr-check', '--report', 'r.xml').err).toMatch(/--report is only for trace-check/);
+    });
+
+    it('pr-check exits 2 naming a missing flag', () => {
+      branchWith('change/c1', { 'src/a.ts': 'x' });
+      const r = cli('pr-check', '--base', 'main', '--base-branch', 'main', '--branch', 'change/c1');
+      expect(r.code).toBe(2);
+      expect(r.err).toMatch(/--repo/);
+    });
+
+    it('pr-check exits 1 and prints problems', () => {
+      branchWith('gate/c1-spec', strayGate);
+      const r = cli('pr-check', '--base', 'main', '--base-branch', 'main', '--branch', 'gate/c1-spec', '--repo', 'acme/app');
+      expect(r.code).toBe(1);
+      expect(r.out).toBe('- stray.txt is outside docs/changes/c1/');
+    });
+
+    it('pr-check exits 0 for an unrelated PR', () => {
+      branchWith('docs-fix', { 'README.md': 'changed' });
+      const r = cli('pr-check', '--base', 'main', '--base-branch', 'main', '--branch', 'docs-fix', '--repo', 'acme/app');
+      expect(r).toEqual({ code: 0, out: 'kind=other', err: '' });
+    });
   });
 });
