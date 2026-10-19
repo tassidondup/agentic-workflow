@@ -241,6 +241,11 @@ describe('ci/wf.yml', () => {
     const upload = stepNamed('verify', (s) => s.uses?.startsWith('actions/upload-artifact@') === true);
     expect(upload.if).toBeUndefined();
     expect(upload.with).toMatchObject({ name: 'junit-report', path: `pr/${REPORT}` });
+    // Breaks if include-hidden-files is removed or false: the report is in the dot-directory .wf-report, which
+    // upload-artifact (v4.4+, default false) silently skips, leaving trace-check nothing to download.
+    expect(upload.with?.['include-hidden-files']).toBe(true);
+    // Breaks if if-no-files-found is removed (default is warn) or set to warn/ignore: a missing report would pass.
+    expect(upload.with?.['if-no-files-found']).toBe('error');
     for (const { step } of allSteps) expect(step.if ?? '').not.toMatch(/always|failure|cancelled/);
     const order = wf.jobs.verify?.steps ?? [];
     expect(order.indexOf(upload)).toBeGreaterThan(order.indexOf(tests));

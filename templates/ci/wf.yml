@@ -136,6 +136,8 @@ jobs:
         with:
           name: junit-report
           path: pr/.wf-report/junit.xml
+          include-hidden-files: true # the report sits in the dot-directory .wf-report, which upload-artifact skips by default
+          if-no-files-found: error # default is warn; a missing report must fail verify, not pass silently
 
   trace-check:
     needs: verify
