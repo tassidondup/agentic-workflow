@@ -58,3 +58,13 @@ export function lastCommitTouching(root: string, ref: string, repoPath: string, 
   const sha = r.stdout.trim();
   return sha === '' ? null : sha;
 }
+
+/** True if the checkout is a shallow clone, whose history cannot be trusted for attribution. Throws on anything unexpected. */
+export function isShallow(root: string, exec: Exec): boolean {
+  const r = run(root, ['rev-parse', '--is-shallow-repository'], exec);
+  if (r.status !== 0) throw fail('rev-parse', r);
+  const out = r.stdout.trim();
+  if (out === 'true') return true;
+  if (out === 'false') return false;
+  throw new Error(`git rev-parse --is-shallow-repository returned unexpected output: "${out.slice(0, 40)}"`);
+}
