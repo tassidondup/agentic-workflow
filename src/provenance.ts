@@ -1,5 +1,5 @@
 import type { Exec } from './exec.js';
-import { blobAt, lastCommitTouching } from './git.js';
+import { blobAt, isShallow, lastCommitTouching } from './git.js';
 import type { GitHubReader, Review } from './github.js';
 import { recordRepoPath } from './record.js';
 import type { Gate } from './types.js';
@@ -14,6 +14,8 @@ export interface ProvenanceInput {
 
 const DECIDING_STATES: ReadonlySet<string> = new Set(['APPROVED', 'CHANGES_REQUESTED', 'DISMISSED']);
 const SHORT_SHA = 7;
+const SHALLOW_MESSAGE =
+  "the checkout is shallow, so the record's history cannot be trusted; fetch full history (fetch-depth: 0)";
 
 const lower = (login: string): string => login.toLowerCase();
 const isApprover = (login: string | null, approvers: readonly string[]): boolean =>
@@ -83,8 +85,26 @@ function checkGate(root: string, input: ProvenanceInput, gate: Gate, gh: GitHubR
   return `${path}: PR #${n} has no approving review from an approver on its final commit`;
 }
 
+/** Why the checkout's history cannot be trusted, or null if it can. Fails closed if the state is unknown. */
+function historyProblem(root: string, exec: Exec): string | null {
+  try {
+    return isShallow(root, exec) ? SHALLOW_MESSAGE : null;
+  } catch (error) {
+    return `cannot tell whether the checkout is shallow (${error instanceof Error ? error.message : String(error)})`;
+  }
+}
+
 /** One problem per gate whose approval record was not merged, via its own PR, by an approver. Empty means all hold. */
-export function provenanceProblems(root: string, input: ProvenanceInput, gh: GitHubReader, exec: Exec): string[] {
+export function provenanceProblems(
+  root: string,
+  input: ProvenanceInput,
+  gh: GitHubReader,
+  exec: Exec,
+): readonly string[] {
+  const unusable = historyProblem(root, exec);
+  if (unusable !== null) {
+    return Object.freeze(input.gates.map((gate) => `${recordRepoPath(input.id, gate)}: ${unusable}`));
+  }
   const problems: string[] = [];
   for (const gate of input.gates) {
     try {
@@ -95,5 +115,5 @@ export function provenanceProblems(root: string, input: ProvenanceInput, gh: Git
       problems.push(`${recordRepoPath(input.id, gate)}: ${message}`);
     }
   }
-  return Object.freeze(problems) as string[];
+  return Object.freeze(problems);
 }

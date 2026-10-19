@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { realExec } from '../src/exec.js';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { realExec, type Exec } from '../src/exec.js';
 import type { GitHubReader, PullDetail, PullSummary, Review } from '../src/github.js';
 import { approvedByApprover, provenanceProblems, type ProvenanceInput } from '../src/provenance.js';
 import { git, makeRepo, type TestRepo } from './helpers/repo.js';
@@ -78,7 +81,7 @@ describe('provenanceProblems', () => {
     pull: () => o.detail ?? detail(),
     reviews: () => o.reviews ?? [review('tassi', 'APPROVED', '2026-10-01T00:00:01Z')],
   });
-  const run = (gh: GitHubReader, i: ProvenanceInput = input()): string[] => provenanceProblems(repo.root, i, gh, realExec);
+  const run = (gh: GitHubReader, i: ProvenanceInput = input()): readonly string[] => provenanceProblems(repo.root, i, gh, realExec);
 
   it('a record merged by an approver on a bot-authored PR with an approving review passes', () => {
     expect(run(stub())).toEqual([]);
@@ -104,6 +107,15 @@ describe('provenanceProblems', () => {
     expect(problems[0]).toContain('no approving review');
   });
 
+  it('login case differences pass via the author branch', () => {
+    expect(run(stub({ detail: detail({ mergedBy: 'TASSI', author: 'TASSI' }), reviews: [] }))).toEqual([]);
+  });
+
+  it('login case differences pass via the merged-by plus review branch', () => {
+    const reviews = [review('TASSI', 'APPROVED', '2026-10-01T00:00:01Z')];
+    expect(run(stub({ detail: detail({ mergedBy: 'TASSI', author: 'Agent-Bot' }), reviews }))).toEqual([]);
+  });
+
   it('a bot-authored PR merged by an approver with no review is rejected', () => {
     expect(run(stub({ reviews: [] }))[0]).toContain('no approving review from an approver on its final commit');
   });
@@ -126,7 +138,7 @@ describe('provenanceProblems', () => {
   });
 
   it('a PR reported as not merged by its detail is rejected', () => {
-    expect(run(stub({ detail: detail({ merged: false }) }))).toHaveLength(1);
+    expect(run(stub({ detail: detail({ merged: false }) }))).toEqual([`${SPEC}: PR #7 is not merged`]);
   });
 
   it('a record missing on the base is rejected', () => {
@@ -174,6 +186,31 @@ describe('provenanceProblems', () => {
     expect(problems).toHaveLength(2);
     expect(problems[0]).toContain(SPEC);
     expect(problems[1]).toContain(DESIGN);
+  });
+
+  it('a shallow checkout is rejected for every gate even if a stub PR would pass', () => {
+    const gates: ProvenanceInput['gates'] = ['spec', 'design'];
+    expect(run(stub(), input(gates))).toEqual([]);
+    const parent = realpathSync(mkdtempSync(join(tmpdir(), 'wf-shallow-')));
+    const clone = join(parent, 'c');
+    try {
+      git(repo.root, 'clone', '-q', '--depth', '1', '--no-single-branch', `file://${repo.root}`, clone);
+      git(clone, 'branch', 'main', 'origin/main');
+      const problems = provenanceProblems(clone, input(gates), stub(), realExec);
+      expect(problems).toEqual([
+        `${SPEC}: the checkout is shallow, so the record's history cannot be trusted; fetch full history (fetch-depth: 0)`,
+        `${DESIGN}: the checkout is shallow, so the record's history cannot be trusted; fetch full history (fetch-depth: 0)`,
+      ]);
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+
+  it('an unknown shallow state is a problem, not a pass', () => {
+    const exec: Exec = () => ({ status: 128, stdout: '', stderr: 'boom' });
+    const problems = provenanceProblems(repo.root, input(), stub(), exec);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('cannot tell whether the checkout is shallow');
   });
 
   it('returns a frozen array', () => {
