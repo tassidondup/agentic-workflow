@@ -4,6 +4,8 @@ import { assertSafeRepoPath } from './paths.js';
 export interface ChangedFile {
   readonly status: string;
   readonly path: string;
+  /** Git file mode: the new mode, or the old mode for a deletion (100644 file, 100755 executable, 120000 symlink, 160000 submodule). */
+  readonly mode: string;
 }
 
 const SAFE_REF = /^[A-Za-z0-9._][A-Za-z0-9._/-]*$/;
@@ -24,14 +26,18 @@ function fail(what: string, r: ExecResult): Error {
 
 /** Files changed on HEAD since it diverged from `base`. A rename is reported as a delete plus an add. */
 export function changedFiles(root: string, base: string, exec: Exec): readonly ChangedFile[] {
-  const r = run(root, ['diff', '--name-status', '--no-renames', '-z', `${assertRef(base)}...HEAD`, '--'], exec);
+  const r = run(root, ['diff', '--raw', '--no-renames', '-z', `${assertRef(base)}...HEAD`, '--'], exec);
   if (r.status !== 0) throw fail('diff', r);
+  // With -z each entry is ":<old mode> <new mode> <old sha> <new sha> <status>" NUL "<path>" NUL.
   const fields = r.stdout.split('\0');
   const files: ChangedFile[] = [];
   for (let i = 0; i + 1 < fields.length; i += 2) {
-    const [status, path] = [fields[i], fields[i + 1]];
-    if (status === undefined || path === undefined) break;
-    files.push(Object.freeze({ status, path }));
+    const [meta, path] = [fields[i], fields[i + 1]];
+    if (meta === undefined || path === undefined) break;
+    const parts = meta.startsWith(':') ? meta.slice(1).split(' ') : [];
+    const [oldMode, newMode, status] = [parts[0], parts[1], parts[4]];
+    if (oldMode === undefined || newMode === undefined || status === undefined) throw new Error(`git diff returned an unreadable entry: "${meta.slice(0, 60)}"`);
+    files.push(Object.freeze({ status, path, mode: status === 'D' ? oldMode : newMode }));
   }
   return Object.freeze(files);
 }
