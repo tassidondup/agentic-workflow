@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { realExec, type Exec } from '../src/exec.js';
 import { assertRef, blobAt, changedFiles, fileAt, isShallow, lastCommitTouching } from '../src/git.js';
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { git, makeRepo, type TestRepo } from './helpers/repo.js';
@@ -32,9 +32,9 @@ describe('changedFiles', () => {
     git(repo.root, 'rm', '-q', 'c.txt');
     commitAll('change');
     expect(changedFiles(repo.root, 'main', realExec)).toEqual([
-      { status: 'A', path: 'a.txt' },
-      { status: 'M', path: 'b.txt' },
-      { status: 'D', path: 'c.txt' },
+      { status: 'A', path: 'a.txt', mode: '100644' },
+      { status: 'M', path: 'b.txt', mode: '100644' },
+      { status: 'D', path: 'c.txt', mode: '100644' },
     ]);
   });
 
@@ -44,8 +44,8 @@ describe('changedFiles', () => {
     git(repo.root, 'mv', 'd.txt', 'e.txt');
     commitAll('rename');
     expect(changedFiles(repo.root, 'main', realExec)).toEqual([
-      { status: 'D', path: 'd.txt' },
-      { status: 'A', path: 'e.txt' },
+      { status: 'D', path: 'd.txt', mode: '100644' },
+      { status: 'A', path: 'e.txt', mode: '100644' },
     ]);
   });
 
@@ -58,7 +58,7 @@ describe('changedFiles', () => {
     repo.write('base-only.txt', 'later');
     commitAll('base moves on');
     git(repo.root, 'checkout', 'feature');
-    expect(changedFiles(repo.root, 'main', realExec)).toEqual([{ status: 'A', path: 'mine.txt' }]);
+    expect(changedFiles(repo.root, 'main', realExec)).toEqual([{ status: 'A', path: 'mine.txt', mode: '100644' }]);
   });
 
   it('returns a filename containing a newline intact', () => {
@@ -66,7 +66,35 @@ describe('changedFiles', () => {
     git(repo.root, 'checkout', '-b', 'feature');
     repo.write('we\nird.txt', 'odd');
     commitAll('odd name');
-    expect(changedFiles(repo.root, 'main', realExec)).toEqual([{ status: 'A', path: 'we\nird.txt' }]);
+    expect(changedFiles(repo.root, 'main', realExec)).toEqual([{ status: 'A', path: 'we\nird.txt', mode: '100644' }]);
+  });
+
+  it('reports file modes: executable, symlink, and the old mode of a deleted symlink', () => {
+    init({ 'f.txt': 'x' });
+    git(repo.root, 'checkout', '-b', 'feature');
+    repo.write('run.sh', '#!/bin/sh\n');
+    chmodSync(join(repo.root, 'run.sh'), 0o755);
+    symlinkSync('../src/a.ts', join(repo.root, 'link.md'));
+    commitAll('exec and symlink');
+    expect(changedFiles(repo.root, 'main', realExec)).toEqual([
+      { status: 'A', path: 'link.md', mode: '120000' },
+      { status: 'A', path: 'run.sh', mode: '100755' },
+    ]);
+    git(repo.root, 'checkout', 'main');
+    git(repo.root, 'merge', '--ff-only', 'feature');
+    git(repo.root, 'checkout', '-b', 'later');
+    git(repo.root, 'rm', '-q', 'link.md');
+    commitAll('drop link');
+    expect(changedFiles(repo.root, 'main', realExec)).toEqual([{ status: 'D', path: 'link.md', mode: '120000' }]);
+  });
+
+  it('reports a file replaced by a symlink as a type change to mode 120000', () => {
+    init({ 'docs.md': 'text' });
+    git(repo.root, 'checkout', '-b', 'feature');
+    rmSync(join(repo.root, 'docs.md'));
+    symlinkSync('src/a.ts', join(repo.root, 'docs.md'));
+    commitAll('swap for symlink');
+    expect(changedFiles(repo.root, 'main', realExec)).toEqual([{ status: 'T', path: 'docs.md', mode: '120000' }]);
   });
 
   it('throws on an unsafe base', () => {

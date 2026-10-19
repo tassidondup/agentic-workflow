@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { classifyPr } from '../src/classify.js';
 import type { ChangedFile } from '../src/git.js';
 
-const f = (status: string, path: string): ChangedFile => ({ status, path });
+const f = (status: string, path: string, mode = '100644'): ChangedFile => ({ status, path, mode });
 
 describe('classifyPr', () => {
   it('a lone approval record under its own change folder is a clean gate PR', () => {
