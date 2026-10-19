@@ -1,5 +1,6 @@
 import { readJsonFile } from './change.js';
 import { isObject, isStringArray } from './guards.js';
+import { floorFor, isNeverExempt } from './exempt.js';
 import { assertSafeRepoPath, isUnderPath } from './paths.js';
 
 export interface TestConfig {
@@ -12,6 +13,7 @@ export interface TestConfig {
 
 export interface WorkflowConfig {
   readonly approvers: readonly string[];
+  readonly exempt: readonly string[];
   readonly test: TestConfig;
 }
 
@@ -55,13 +57,27 @@ function parseTest(test: unknown): TestConfig {
   });
 }
 
+/** Repo paths (a folder or one file) whose PRs skip the gates. Absent means nothing is exempt. Nothing in the never-exempt floor can be listed. */
+function parseExempt(exempt: unknown, test: TestConfig): readonly string[] {
+  if (exempt === undefined) return Object.freeze([]);
+  if (!Array.isArray(exempt)) return fail('"exempt" must be a list of repo paths');
+  const floor = floorFor(test);
+  const entries = exempt.map((e: unknown, i) => {
+    const path = safePath(typeof e === 'string' && e.endsWith('/') ? e.slice(0, -1) : e, `exempt[${i}]`);
+    if (isNeverExempt(path, floor)) return fail(`"exempt[${i}]" (${path}) is a protected path and cannot be exempt`);
+    return path;
+  });
+  return Object.freeze([...new Set(entries)]);
+}
+
 export function parseConfig(raw: unknown): WorkflowConfig {
   if (!isObject(raw)) return fail('must be a JSON object');
-  const { approvers, test } = raw;
+  const { approvers, test, exempt } = raw;
   if (!isStringArray(approvers) || approvers.length === 0 || approvers.some((a) => a.trim() === '')) {
     return fail('"approvers" must be a non-empty list of GitHub usernames');
   }
-  return Object.freeze({ approvers: Object.freeze([...approvers]), test: parseTest(test) });
+  const parsedTest = parseTest(test);
+  return Object.freeze({ approvers: Object.freeze([...approvers]), exempt: parseExempt(exempt, parsedTest), test: parsedTest });
 }
 
 export const CONFIG_FILE = 'workflow.config.json';
