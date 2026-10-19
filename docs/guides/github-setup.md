@@ -43,9 +43,9 @@ Store the token where only the agents' runtime reads it (for example `GH_TOKEN` 
 
 ## 3. Install
 Until the installer exists (Plan 3), by hand:
-1. Copy `templates/CODEOWNERS` to `.github/CODEOWNERS`. Replace every `@APPROVER` with your login (or each approver's). Add a line for each runner config in `workflow.config.json → test.harness` other than `vitest.config.*`. Code owners need explicit write access to the repo. *Verified 2026-10-19: docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners.*
+1. Copy `templates/CODEOWNERS` to `.github/CODEOWNERS`. Replace every `@APPROVER` with your login (or each approver's). Add a line for each runner config in `workflow.config.json → test.harness` other than `vitest.config.*`. Code owners need explicit write access to the repo. *Verified 2026-10-19: docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners.* The template doesn't protect `package.json` test scripts or lockfiles; see *Known limits* in the design doc.
 2. Copy `templates/ci/wf.yml` to `.github/workflows/wf.yml`.
-3. Put a self-contained `wf` bundle at `.workflow/wf/bin.js` (the path in the workflow's `WF` variable). It must resolve nothing from `node_modules`; see section 5.
+3. Put a self-contained `wf` bundle at `.workflow/wf/bin.js` (the path in the workflow's `WF` variable). It must resolve nothing from `node_modules`. **There is no way to make one yet.** This repo's `dist/` is NOT a bundle: `npm run build` is plain `tsc`, and `dist/junit.js` imports `fast-xml-parser`. Producing the bundle is the Plan 3 installer's job. See *Until Plan 3* below.
 4. Make sure `workflow.config.json` lists your login in `approvers`.
 5. Open this as one PR (the **install PR**) and merge it. See section 4 before creating the ruleset.
 6. Create the ruleset:
@@ -58,8 +58,14 @@ Until the installer exists (Plan 3), by hand:
 
 GitHub reads CODEOWNERS from the PR's **base** branch (*verified 2026-10-19, about-code-owners page*), so the install PR is not yet protected by the file it adds.
 
+**Until Plan 3.** The trusted-checkout guarantee (section 5, D3) can't be met by hand today. Copying `dist/` to `.workflow/wf/` doesn't work. Tested locally on 2026-10-19: a copy in `trusted/.workflow/wf/`, run from a sibling `pr/` as CI does, fails on load with `ERR_MODULE_NOT_FOUND` for `fast-xml-parser`, even for `--help`. That holds even with the package in `pr/node_modules`, because Node looks only in the folders above `trusted/`. Any workaround that lets `wf` load its dependencies from files the PR controls brings back the hole D3 closes. For someone installing now:
+- CODEOWNERS and the ruleset's `pull_request` rules work without `wf`. Install them, but leave out the `required_status_checks` rule.
+- Without a bundle the workflow fails `gate-check`, `memory-check` and `stage-check` on every PR (`verify` and `trace-check` are skipped). If those checks were required, nothing could merge. Add the rule once a real bundle is on the default branch.
+- `wf` still works locally (`npm run build`, then `node dist/bin.js …` in this repo), but nothing in CI enforces the gates.
+- The live verification (section 7) needs a bundle too. A bundle made by hand for it is untested here; record how it was made.
+
 ## 4. Bootstrap
-Every job runs `node ../trusted/.workflow/wf/bin.js`, where `trusted/` is a checkout of the PR's base commit. On the install PR the base has no `.workflow/wf/bin.js`, so **all five jobs fail**. That is expected. So:
+Every job runs `node ../trusted/.workflow/wf/bin.js`, where `trusted/` is a checkout of the PR's base commit. On the install PR the base has no `.workflow/wf/bin.js`, so `gate-check`, `memory-check` and `stage-check` fail. `verify` and `trace-check` are skipped because the job they need failed, and skipped jobs report success (see *Keep all five checks required*). That is expected. So:
 1. Merge the install PR before the five checks are required (create the ruleset afterwards, or first create it without the `required_status_checks` rule and add that rule after the merge).
 2. From the next PR on, `wf` runs from the base and the checks mean something.
 
@@ -71,7 +77,7 @@ Approvers come from `workflow.config.json` **at the base commit**, never from th
 **PR kind (D4).**
 - **Gate PR:** adds or changes (git status A, M or T) a file `docs/changes/<id>/approvals/<spec|design|tests>.json`. It must hold exactly one record, and every changed path, including deletions, must be under `docs/changes/<id>/`. A head branch `change/<other-id>` is refused. This closes the ADR 0001 attack where a tests-gate PR also edits the runner config.
 - **Implementation PR:** no record, head branch `change/<id>` with a valid id.
-- **Other:** anything else. **`wf` checks nothing on it.** Only CODEOWNERS and the ruleset protect it. An agent can name an implementation branch anything and get `other`; your review of protected paths is the backstop. A P0 lane that closes this is out of scope for now.
+- **Other:** anything else. **`wf` checks nothing on it**, with one exception: a head branch `change/<invalid-id>` (for example `change/Bad_ID`) is classified `other` with a problem, and `classify` and `pr-check` fail. Only CODEOWNERS and the ruleset protect it. An agent can name an implementation branch anything and get `other`; your review of protected paths is the backstop. A P0 lane that closes this is out of scope for now.
 
 **Provenance (D1).** For each record the PR relies on (the prerequisites of a gate PR's gate; all three for an implementation PR), CI requires:
 1. the record is on the base commit and unchanged in this PR;
@@ -84,7 +90,7 @@ Logins compare case-insensitively. Any git or GitHub error, odd response, or amb
 In plain words: a record counts only if one of your accounts merged its PR, and either you wrote it or you approved its last commit. **If agents hold your own token, provenance proves nothing**: the "author is an approver" branch accepts any PR opened and merged by your account.
 
 **What runs `wf` (D3).** CI checks out the PR into `pr/` and the PR's base commit into `trusted/`, side by side, and runs `wf` from `trusted/` with `pr/` as the working directory. So a PR can't edit the code that judges it. Two conditions:
-- `bin.js` must be a self-contained bundle. If it imported anything from `node_modules`, Node would resolve it from the PR's files. The installer (Plan 3) must ship it that way.
+- `bin.js` must be a self-contained bundle. With the sibling layout, an unbundled `wf` doesn't load the PR's `node_modules`; it fails to load at all (section 3, *Until Plan 3*). Making it load by installing dependencies where the PR's code can write them would let the PR change its judge. The installer (Plan 3) must ship a bundle; `dist/` is not one.
 - Under `pull_request`, GitHub runs the workflow file from the PR's merge commit, not from the base. A PR can edit `wf.yml` to skip the checks. Only the CODEOWNERS review of `/.github/` stops that, so review every workflow change.
 
 **Staging folders (D5).** `docs/changes/*/design/` and `docs/changes/*/tests/` are always code-owned. CODEOWNERS can't say "only once approved".
@@ -96,7 +102,7 @@ In plain words: a record counts only if one of your accounts merged its PR, and 
 ## 6. Solo developer: the review-count conflict
 GitHub does not let an author approve their own PR (*verified 2026-10-19: docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/approving-a-pull-request-with-required-reviews, "Pull request authors cannot approve their own pull requests"*). The shipped ruleset requires one approving review and code-owner review. So with one human approver, **a PR you author can never merge**.
 
-**Solo with a bot (recommended).** The bot opens every PR, approval-record PRs included; you approve and merge. Changes you want to make yourself go through the bot too. Note `require_last_push_approval`: if you push a fix onto the bot's branch, you can't approve that push; ask the bot to push it instead. Provenance then rests on branch 4b (your review on the final commit), the strong one.
+**Solo with a bot (recommended).** The bot opens every PR, approval-record PRs included; you approve and merge. Changes you want to make yourself go through the bot too. Note `require_last_push_approval`: if you push a fix onto the bot's branch, you can't approve that push; ask the bot to push it instead. Provenance then rests on the review branch of rule 4 (your approval on the final commit), the stronger one.
 
 **Solo without a bot (weaker).** Edit the `pull_request` parameters before creating the ruleset:
 ```json
@@ -113,14 +119,14 @@ What you lose: GitHub enforces no human review at all. Anyone with write access 
 Needs the bot account and a scratch repo. Nothing here has been done yet; tick each box when it is, and record what you saw.
 
 Setup:
-- [ ] Scratch repo (public), installed as in section 3, install PR merged, ruleset created.
+- [ ] Scratch repo (public), installed as in section 3 with a `wf` bundle (record how it was made), install PR merged, ruleset created.
 - [ ] Bot account with a token per section 2 (note which option).
 
 Approval record by the bot, approved and merged by you:
 - [ ] Bot pushes a branch and opens a PR adding a spec record (`wf approve <id> spec`). Checks run on the bot's push.
 - [ ] You approve on the final commit and merge.
 - [ ] On a follow-up branch with a design record, run `wf pr-check --base <base sha> --base-branch main --branch <branch> --repo OWNER/REPO` with a real `GH_TOKEN` (read-only is enough). Expect exit 0.
-- [ ] Record the observed review `state` values from `gh api repos/OWNER/REPO/pulls/<n>/reviews` (expected `APPROVED`; the docs don't list them).
+- [ ] Record the observed review `state` values from `gh api repos/OWNER/REPO/pulls/<n>/reviews` (expected `APPROVED`; the docs don't list them). Weak hint, not verification: on 2026-10-19 `gh api repos/cli/cli/pulls/<n>/reviews` on public cli/cli PRs returned `APPROVED` and `COMMENTED`, with `commit_id` and `submitted_at` set.
 
 Bot merge:
 - [ ] Bot tries to merge an approval-record PR before your approval. Expect the ruleset to refuse.
@@ -128,7 +134,7 @@ Bot merge:
 
 Workflow:
 - [ ] The five jobs run and report under the exact names the ruleset requires.
-- [ ] A tests-gate PR that also edits `vitest.config.ts` fails `gate-check` and every job that runs `wf classify` (`stage-check`, then `verify` and `trace-check` show as skipped).
+- [ ] A tests-gate PR that also edits `vitest.config.ts` fails `gate-check` and `stage-check` (both report the scope problem). `verify` and `trace-check` are skipped (reported as success).
 - [ ] `verify` uploads `junit-report` and `trace-check` reads it.
 
 Results: (fill in date, repo, outcomes, review states seen)
