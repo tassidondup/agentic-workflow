@@ -138,7 +138,7 @@ describe('wf cli', () => {
     /** A git repo with main committed, then a branch that adds `files`. */
     function branchWith(branch: string, files: Record<string, string>): void {
       repo?.cleanup();
-      repo = makeRepo({ 'README.md': 'hi' });
+      repo = makeRepo({ 'README.md': 'hi', 'workflow.config.json': JSON.stringify({ ...(JSON.parse(CFG_BASE) as object), exempt: ['README.md'] }) });
       git(repo.root, 'init', '-b', 'main');
       git(repo.root, 'add', '-A');
       git(repo.root, 'commit', '-m', 'init');
@@ -147,6 +147,7 @@ describe('wf cli', () => {
       git(repo.root, 'add', '-A');
       git(repo.root, 'commit', '-m', 'work');
     }
+    const CFG_BASE = JSON.stringify({ approvers: ['tassi'], test: { command: ['t'], junitReport: 'reports/junit.xml', acceptanceDir: 'tests/acceptance', harness: [] } });
     const strayGate = { [`${C}/approvals/spec.json`]: '{}', 'stray.txt': 'x' };
 
     it('classify prints only key=value lines on stdout and problems on stderr', () => {
@@ -224,10 +225,33 @@ describe('wf cli', () => {
       expect(c.err).toMatch(/^- git diff failed/);
     });
 
-    it('pr-check exits 0 for an unrelated PR', () => {
+    it('pr-check exits 0 for a PR that only touches exempt paths', () => {
       branchWith('docs-fix', { 'README.md': 'changed' });
       const r = cli('pr-check', '--base', 'main', '--base-branch', 'main', '--branch', 'docs-fix', '--repo', 'acme/app');
-      expect(r).toEqual({ code: 0, out: 'kind=other', err: '' });
+      expect(r).toEqual({ code: 0, out: 'kind=exempt', err: '' });
+    });
+
+    it('classify and pr-check exit 1 for source changes on an ordinary branch, with the path escaped', () => {
+      branchWith('feat/sneaky', { 'src/a\nb.ts': 'x' });
+      const line = '- src/a\\u000ab.ts is not exempt, and this PR is neither a gate PR nor on a change/<id> branch';
+      const c = cli('classify', '--base', 'main', '--branch', 'feat/sneaky');
+      expect(c).toEqual({ code: 1, out: '', err: line });
+      const p = cli('pr-check', '--base', 'main', '--base-branch', 'main', '--branch', 'feat/sneaky', '--repo', 'acme/app');
+      expect(p).toEqual({ code: 1, out: line, err: '' });
+    });
+
+    it('a base without workflow.config.json is a failed check for such a PR, not a usage error', () => {
+      repo?.cleanup();
+      repo = makeRepo({ 'README.md': 'hi' });
+      git(repo.root, 'init', '-b', 'main');
+      git(repo.root, 'add', '-A');
+      git(repo.root, 'commit', '-m', 'init');
+      git(repo.root, 'checkout', '-b', 'docs-fix');
+      repo.write('README.md', 'changed');
+      git(repo.root, 'commit', '-qam', 'work');
+      const c = cli('classify', '--base', 'main', '--branch', 'docs-fix');
+      expect(c).toMatchObject({ code: 1, out: '' });
+      expect(c.err).toMatch(/exempt paths must come from the base branch/);
     });
   });
 

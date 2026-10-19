@@ -8,6 +8,7 @@
 /.github/ @APPROVER
 /workflow.config.json @APPROVER
 /AGENTS.md @APPROVER
+/CLAUDE.md @APPROVER
 /roles/ @APPROVER
 /docs/specs/ @APPROVER
 /docs/decisions/ @APPROVER

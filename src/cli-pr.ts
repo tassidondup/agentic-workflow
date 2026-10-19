@@ -38,7 +38,7 @@ function attempt(fn: () => Classification): Classification {
   try {
     return fn();
   } catch (e) {
-    return Object.freeze({ kind: 'other', change: null, gate: null, problems: [(e as Error).message] });
+    return Object.freeze({ kind: 'rejected', change: null, gate: null, problems: [(e as Error).message] });
   }
 }
 

@@ -296,6 +296,7 @@ describe('CODEOWNERS', () => {
     '/.github/',
     '/workflow.config.json',
     '/AGENTS.md',
+    '/CLAUDE.md',
     '/roles/',
     '/docs/specs/',
     '/docs/decisions/',

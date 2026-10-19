@@ -139,7 +139,7 @@ describe('prCheck: implementation PRs', () => {
     implementationBranch();
     git(repo.root, 'checkout', '-b', 'change/Bad_ID');
     const r = check('change/Bad_ID');
-    expect(r.kind).toBe('other');
+    expect(r.kind).toBe('rejected');
     expect(r.problems).toEqual(['branch change/Bad_ID is not a valid change id']);
     expect(ghCalls).toEqual([]);
   });
@@ -171,7 +171,7 @@ describe('prCheck: approvers come from the base commit', () => {
     repo.write('src/feature.ts', 'x');
     commit('implement');
     const r = check('change/c1');
-    expect(r.problems).toContain('workflow.config.json is not on main; approvers must come from the base branch');
+    expect(r.problems).toContain('workflow.config.json is not on main; approvers and exempt paths must come from the base branch');
     expect(ghCalls).toEqual([]);
   });
 
@@ -250,22 +250,77 @@ describe('prCheck: gate PRs', () => {
   });
 });
 
-describe('prCheck: other PRs', () => {
-  it('an other PR passes without touching GitHub', () => {
-    mainWith('design');
-    git(repo.root, 'checkout', '-b', 'docs-fix');
-    repo.write('README.md', 'hello\n');
-    commit('docs');
-    const r = check('docs-fix');
-    expect(r).toEqual({ kind: 'other', change: null, gate: null, problems: [] });
+/** Commits a base config that exempts `exempt`, on main, before any branch is cut. */
+function mainExempting(exempt: string[]): void {
+  mainWith('design');
+  repo.write('workflow.config.json', JSON.stringify({ ...(JSON.parse(CONFIG) as object), exempt }));
+  commit('exempt paths');
+}
+
+describe('prCheck: PRs that are neither gate nor change', () => {
+  const branchEditing = (branch: string, path: string): void => {
+    git(repo.root, 'checkout', '-b', branch);
+    repo.write(path, 'hello\n');
+    commit('work');
+  };
+
+  it('an implementation change on an ordinary branch fails and makes no GitHub call (the Codex finding)', () => {
+    mainExempting(['README.md']);
+    branchEditing('feat/sneaky', 'src/feature.ts');
+    const r = check('feat/sneaky');
+    expect(r.kind).toBe('rejected');
+    expect(r.problems).toEqual(['src/feature.ts is not exempt, and this PR is neither a gate PR nor on a change/<id> branch']);
     expect(ghCalls).toEqual([]);
   });
 
-  it('returns frozen results', () => {
+  it('an exempt-only PR passes without touching GitHub', () => {
+    mainExempting(['README.md']);
+    branchEditing('docs-fix', 'README.md');
+    expect(check('docs-fix')).toEqual({ kind: 'exempt', change: null, gate: null, problems: [] });
+    expect(ghCalls).toEqual([]);
+  });
+
+  it('a PR cannot exempt its own files: the list comes from the base commit', () => {
+    mainExempting(['README.md']);
+    git(repo.root, 'checkout', '-b', 'feat/widen');
+    repo.write('workflow.config.json', JSON.stringify({ ...(JSON.parse(CONFIG) as object), exempt: ['README.md', 'src'] }));
+    repo.write('src/feature.ts', 'x');
+    commit('widen exemption and add code');
+    const r = check('feat/widen');
+    expect(r.kind).toBe('rejected');
+    expect([...r.problems].sort()).toEqual([
+      'src/feature.ts is not exempt, and this PR is neither a gate PR nor on a change/<id> branch',
+      'workflow.config.json is not exempt, and this PR is neither a gate PR nor on a change/<id> branch',
+    ]);
+  });
+
+  it('a base with no exempt list rejects every such PR', () => {
     mainWith('design');
-    git(repo.root, 'checkout', '-b', 'docs-fix');
-    repo.write('README.md', 'hello\n');
-    commit('docs');
+    branchEditing('docs-fix', 'README.md');
+    expect(check('docs-fix').kind).toBe('rejected');
+  });
+
+  it('a base without workflow.config.json throws, which the CLI reports as a failed check', () => {
+    mainWith('design');
+    git(repo.root, 'rm', '-q', 'workflow.config.json');
+    commit('drop config');
+    branchEditing('docs-fix', 'README.md');
+    expect(() => check('docs-fix')).toThrow(/approvers and exempt paths must come from the base branch/);
+  });
+
+  it('a gate or change PR does not need the exempt list to be readable', () => {
+    mainWith('design');
+    repo.write('workflow.config.json', '{"approvers": ["tassi"], "exempt": "docs", "test": {}}');
+    commit('config with a bad exempt list');
+    git(repo.root, 'checkout', '-b', 'change/c1');
+    repo.write('src/feature.ts', 'x');
+    commit('implement');
+    expect(check('change/c1').kind).toBe('change');
+  });
+
+  it('returns frozen results', () => {
+    mainExempting(['README.md']);
+    branchEditing('docs-fix', 'README.md');
     const r = check('docs-fix');
     expect(Object.isFrozen(r)).toBe(true);
     expect(Object.isFrozen(r.problems)).toBe(true);
