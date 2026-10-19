@@ -23,7 +23,7 @@ function needBase(cmd: string, flags: PrFlags): string {
 }
 
 /** Control characters (newlines, ESC) in a diff path or branch name must not forge a log line or runner command. */
-const escapeControl = (s: string): string =>
+export const escapeControl = (s: string): string =>
   s.replace(/[\x00-\x1f\x7f]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
 
 /** GITHUB_OUTPUT lines. Only an enum and validated ids appear here, so no value can inject a line. */
