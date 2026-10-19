@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { realExec } from '../src/exec.js';
-import { assertRef, blobAt, changedFiles, isShallow, lastCommitTouching } from '../src/git.js';
+import { realExec, type Exec } from '../src/exec.js';
+import { assertRef, blobAt, changedFiles, fileAt, isShallow, lastCommitTouching } from '../src/git.js';
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -103,6 +103,31 @@ describe('blobAt', () => {
     init({ 'f.txt': 'x' });
     expect(() => blobAt(repo.root, 'HEAD', '../f.txt', realExec)).toThrow(/Unsafe repository path/);
     expect(() => blobAt(repo.root, '-x', 'f.txt', realExec)).toThrow(/Unsafe git ref/);
+  });
+});
+
+describe('fileAt', () => {
+  it('returns the text at a ref, even after the working tree changed, and null for a missing path', () => {
+    init({ 'a.txt': 'base text\n' });
+    const first = git(repo.root, 'rev-parse', 'HEAD').trim();
+    repo.write('a.txt', 'edited\n');
+    commitAll('edit');
+    expect(fileAt(repo.root, first, 'a.txt', realExec)).toBe('base text\n');
+    expect(fileAt(repo.root, 'HEAD', 'a.txt', realExec)).toBe('edited\n');
+    expect(fileAt(repo.root, 'main', 'missing.txt', realExec)).toBeNull();
+  });
+
+  it('throws for an unknown or unsafe ref and for an unsafe path', () => {
+    init({ 'a.txt': 'x' });
+    expect(() => fileAt(repo.root, 'nope', 'a.txt', realExec)).toThrow(/rev-parse/);
+    expect(() => fileAt(repo.root, '--evil', 'a.txt', realExec)).toThrow(/Unsafe git ref/);
+    expect(() => fileAt(repo.root, 'main', '../a.txt', realExec)).toThrow();
+  });
+
+  it('throws when cat-file fails', () => {
+    init({ 'a.txt': 'x' });
+    const exec: Exec = (cmd, args, cwd) => (args[0] === 'cat-file' ? { status: 128, stdout: '', stderr: 'boom' } : realExec(cmd, args, cwd));
+    expect(() => fileAt(repo.root, 'main', 'a.txt', exec)).toThrow(/cat-file failed/);
   });
 });
 

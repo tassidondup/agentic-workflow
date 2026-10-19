@@ -205,6 +205,24 @@ describe('wf cli', () => {
       expect(r.out).toBe('- stray.txt is outside docs/changes/c1/');
     });
 
+    it('escapes control characters in problem lines so a file name cannot forge a log line', () => {
+      branchWith('gate/c1-spec', { [`${C}/approvals/spec.json`]: '{}', 'x\n::error::boom': 'x' });
+      const c = cli('classify', '--base', 'main', '--branch', 'gate/c1-spec');
+      expect(c.err).toBe('- x\\u000a::error::boom is outside docs/changes/c1/');
+      const p = cli('pr-check', '--base', 'main', '--base-branch', 'main', '--branch', 'gate/c1-spec', '--repo', 'acme/app');
+      expect(p.out).toBe('- x\\u000a::error::boom is outside docs/changes/c1/');
+    });
+
+    it('a git failure is a failed check (exit 1), not a usage error', () => {
+      branchWith('change/c1', { 'src/a.ts': 'x' });
+      const p = cli('pr-check', '--base', 'nosuchref', '--base-branch', 'main', '--branch', 'change/c1', '--repo', 'acme/app');
+      expect(p.code).toBe(1);
+      expect(p.out).toMatch(/^- git diff failed/);
+      const c = cli('classify', '--base', 'nosuchref', '--branch', 'change/c1');
+      expect(c).toMatchObject({ code: 1, out: '' });
+      expect(c.err).toMatch(/^- git diff failed/);
+    });
+
     it('pr-check exits 0 for an unrelated PR', () => {
       branchWith('docs-fix', { 'README.md': 'changed' });
       const r = cli('pr-check', '--base', 'main', '--base-branch', 'main', '--branch', 'docs-fix', '--repo', 'acme/app');

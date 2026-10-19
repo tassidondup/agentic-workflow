@@ -5,7 +5,7 @@ import { approve } from '../src/approve.js';
 import { realExec } from '../src/exec.js';
 import { checkGate } from '../src/gate-check.js';
 import { prCheck, type PrCheckInput } from '../src/pr-check.js';
-import { writeValidBaseline, changeFiles } from './helpers/change.js';
+import { CONFIG, writeValidBaseline, changeFiles } from './helpers/change.js';
 import { ghCalls, resetGhCalls, withFakeGh, type GhRoute } from './helpers/fake-gh.js';
 import { git, makeRepo, type TestRepo } from './helpers/repo.js';
 
@@ -148,6 +148,43 @@ describe('prCheck: implementation PRs', () => {
     implementationBranch();
     const bad = { ...input('change/c1'), base: '--upload-pack=x' };
     expect(() => prCheck(repo.root, bad, withFakeGh([], realExec))).toThrow(/Unsafe git ref/);
+  });
+});
+
+describe('prCheck: approvers come from the base commit', () => {
+  it('a PR that adds the bot to approvers in its own diff is still rejected', () => {
+    const shas = implementationBranch();
+    const widened = { ...JSON.parse(CONFIG), approvers: ['tassi', 'agent-bot'] };
+    repo.write('workflow.config.json', JSON.stringify(widened));
+    commit('make the bot an approver');
+    const routes = [...mergedPr({ sha: shas.spec, n: 7 }), ...mergedPr({ sha: shas.design, n: 8, mergedBy: 'agent-bot' }), ...mergedPr({ sha: shas.tests, n: 9 })];
+    const r = check('change/c1', routes);
+    expect(r.kind).toBe('change');
+    expect(r.problems).toEqual([`${C}/approvals/design.json: PR #8 was merged by agent-bot, who is not an approver`]);
+  });
+
+  it('a base without workflow.config.json is a problem and makes no GitHub call', () => {
+    mainWith('design');
+    git(repo.root, 'rm', '-q', 'workflow.config.json');
+    commit('drop config');
+    git(repo.root, 'checkout', '-b', 'change/c1');
+    repo.write('src/feature.ts', 'x');
+    commit('implement');
+    const r = check('change/c1');
+    expect(r.problems).toContain('workflow.config.json is not on main; approvers must come from the base branch');
+    expect(ghCalls).toEqual([]);
+  });
+
+  it('a base config that cannot be parsed is a problem, not a throw', () => {
+    mainWith('design');
+    repo.write('workflow.config.json', '{not json');
+    commit('break config');
+    git(repo.root, 'checkout', '-b', 'change/c1');
+    repo.write('src/feature.ts', 'x');
+    commit('implement');
+    const r = check('change/c1');
+    expect(r.problems.some((p) => p.startsWith('workflow.config.json on main is unusable for approvers'))).toBe(true);
+    expect(ghCalls).toEqual([]);
   });
 });
 

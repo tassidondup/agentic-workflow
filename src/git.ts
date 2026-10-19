@@ -49,6 +49,15 @@ export function blobAt(root: string, ref: string, repoPath: string, exec: Exec):
   return r.stdout.trim();
 }
 
+/** Text of `repoPath` at `ref`, or null if the path does not exist there. Throws if `ref` is unknown or git fails. */
+export function fileAt(root: string, ref: string, repoPath: string, exec: Exec): string | null {
+  const sha = blobAt(root, ref, repoPath, exec);
+  if (sha === null) return null;
+  const r = run(root, ['cat-file', 'blob', sha], exec);
+  if (r.status !== 0) throw fail('cat-file', r);
+  return r.stdout;
+}
+
 /** Newest commit reachable from `ref` that touched `repoPath`, or null if none did. */
 export function lastCommitTouching(root: string, ref: string, repoPath: string, exec: Exec): string | null {
   const safeRef = assertRef(ref);
