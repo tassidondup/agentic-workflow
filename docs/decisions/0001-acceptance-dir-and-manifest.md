@@ -54,3 +54,4 @@ Three changes to the `wf` core. No GitHub dependency.
 ## Follow-up
 - Done (2026-10-07): design doc v2.4 replaces the "v1 limit", adds `acceptanceDir`, `harness` and the manifest to the `workflow.config.json` and `baseline.json` shapes, and makes Plan 2's protected paths defence in depth for these attacks.
 - Done: implemented with an adversarial test for each attack (`test/e2e.test.ts`, "rejects every dogfood attack"). The same test fails against the pre-ADR code: the bypass exits 0 there.
+- Done (2026-10-19, Plan 2a): CI refuses a gate PR that changes anything outside `docs/changes/<id>/**` or carries more than one record, which closes the manifest-from-branch hole above. Implemented in `wf classify` and `wf pr-check` (`src/classify.ts`); live GitHub run pending (`docs/guides/github-setup.md`, section 7).
