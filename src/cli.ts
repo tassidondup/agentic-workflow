@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { approve } from './approve.js';
+import { runClassify, runPrCheck, type PrFlags } from './cli-pr.js';
 import type { Exec } from './exec.js';
 import { checkAll, checkGate } from './gate-check.js';
 import { parseJUnit } from './junit.js';
@@ -12,6 +13,7 @@ import { lintChange } from './spec-lint.js';
 import { promote, stageCheck } from './stage.js';
 import { traceCheck } from './trace.js';
 import { GATES, STAGE_GATES, type Gate, type GateResult, type Issue, type StageGate } from './types.js';
+import { UsageError } from './usage-error.js';
 
 export interface Io {
   out(s: string): void;
@@ -28,9 +30,11 @@ const USAGE = `Usage: wf <command> [args] [--root <dir>]
   baseline <id>                        run staged tests against HEAD, write baseline.json
   trace-check <id> --report <path>     every required row must have an executed, passing test under test.acceptanceDir
   spec-lint <id>                       lint the change's example tables
-  memory-check                         check context.md, glossary.md and decision audits`;
-
-class UsageError extends Error {}
+  memory-check                         check context.md, glossary.md and decision audits
+  classify --base <ref> --branch <name>
+                                       print kind=, change=, gate= for a PR (stdout is GITHUB_OUTPUT-safe)
+  pr-check --base <ref> --base-branch <name> --branch <name> --repo <owner/name>
+                                       classify a PR, check its gates and that its records were merged by an approver`;
 
 const asGate = (g: string | undefined): Gate => {
   if (!GATES.includes(g as Gate)) throw new UsageError('gate must be one of spec, design, tests');
@@ -66,14 +70,35 @@ const ARITY: Readonly<Record<string, number>> = {
   'trace-check': 1,
   'spec-lint': 1,
   'memory-check': 0,
+  classify: 0,
+  'pr-check': 0,
 };
 
-function dispatch(cmd: string | undefined, pos: readonly string[], root: string, report: string | undefined, io: Io): number {
+type Flags = PrFlags & Readonly<{ report?: string }>;
+
+/** Which commands each flag belongs to. A flag on any other command is a usage error. */
+const FLAG_COMMANDS: Readonly<Record<keyof Flags, readonly string[]>> = {
+  report: ['trace-check'],
+  base: ['classify', 'pr-check'],
+  'base-branch': ['pr-check'],
+  branch: ['classify', 'pr-check'],
+  repo: ['pr-check'],
+};
+
+function assertFlagsFit(cmd: string | undefined, flags: Flags): void {
+  for (const [flag, users] of Object.entries(FLAG_COMMANDS)) {
+    if (flags[flag as keyof Flags] !== undefined && !users.includes(cmd ?? '')) {
+      throw new UsageError(`--${flag} is only for ${users.join(' and ')}`);
+    }
+  }
+}
+
+function dispatch(cmd: string | undefined, pos: readonly string[], root: string, flags: Flags, io: Io): number {
   const max = cmd ? ARITY[cmd] : undefined;
   if (max !== undefined && pos.length > max) {
     throw new UsageError(`${cmd} takes at most ${max} argument${max === 1 ? '' : 's'}`);
   }
-  if (report !== undefined && cmd !== 'trace-check') throw new UsageError('--report is only for trace-check');
+  assertFlagsFit(cmd, flags);
   switch (cmd) {
     case 'approve': {
       const { path } = approve(root, needId(pos[0]), asGate(pos[1]));
@@ -98,6 +123,7 @@ function dispatch(cmd: string | undefined, pos: readonly string[], root: string,
       return showProblems(io, r.problems);
     }
     case 'trace-check': {
+      const report = flags.report;
       if (!report) throw new UsageError('trace-check needs --report <path to JUnit XML>');
       const id = needId(pos[0]);
       const cases = parseJUnit(readRepoFile(root, report, 'utf8'));
@@ -107,6 +133,10 @@ function dispatch(cmd: string | undefined, pos: readonly string[], root: string,
       return showIssues(io, lintChange(root, needId(pos[0])));
     case 'memory-check':
       return showIssues(io, memoryCheck(root));
+    case 'classify':
+      return runClassify(root, flags, io);
+    case 'pr-check':
+      return runPrCheck(root, flags, io);
     default:
       throw new UsageError(cmd ? `Unknown command: ${cmd}` : 'Missing command');
   }
@@ -118,14 +148,22 @@ export function run(argv: readonly string[], io: Io): number {
       args: [...argv],
       allowPositionals: true,
       strict: true,
-      options: { root: { type: 'string' }, report: { type: 'string' }, help: { type: 'boolean', short: 'h' } },
+      options: {
+        root: { type: 'string' },
+        report: { type: 'string' },
+        base: { type: 'string' },
+        'base-branch': { type: 'string' },
+        branch: { type: 'string' },
+        repo: { type: 'string' },
+        help: { type: 'boolean', short: 'h' },
+      },
     });
     if (values.help) {
       io.out(USAGE);
       return 0;
     }
     const [cmd, ...pos] = positionals;
-    return dispatch(cmd, pos, resolve(io.cwd, values.root ?? '.'), values.report, io);
+    return dispatch(cmd, pos, resolve(io.cwd, values.root ?? '.'), values, io);
   } catch (e) {
     io.err(`wf: ${(e as Error).message}`);
     if (e instanceof UsageError) io.err(USAGE);
