@@ -36,7 +36,7 @@ export function changedFiles(root: string, base: string, exec: Exec): readonly C
   return Object.freeze(files);
 }
 
-/** Blob sha of `repoPath` at `ref`, or null if the path does not exist there. Throws if `ref` is unknown. */
+/** Blob sha of `repoPath` at `ref`, or null if the path does not exist there. Throws if `ref` is unknown. A null result must never be treated as a pass (a killed git process also maps to status 1). */
 export function blobAt(root: string, ref: string, repoPath: string, exec: Exec): string | null {
   const safeRef = assertRef(ref);
   const safePath = assertSafeRepoPath(repoPath);

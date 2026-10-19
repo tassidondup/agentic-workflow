@@ -11,6 +11,10 @@
 name: wf
 on:
   pull_request:
+    # The installer replaces `main` with the repo's default branch. wf must only ever run for PRs into a protected
+    # branch, because trusted/ is that base's commit: a PR into an unprotected branch would be judged by code that
+    # branch's writers control, and its green checks could show on a head SHA.
+    branches: [main]
     types: [opened, synchronize, reopened, edited] # edited fires when the base branch changes
 permissions:
   contents: read
@@ -61,7 +65,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: pr
-          fetch-depth: 0 # full history: wf's provenance check rejects shallow clones
+          fetch-depth: 0 # same checkout in every job; memory-check itself reads no git history
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -86,7 +90,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: pr
-          fetch-depth: 0 # full history: wf's provenance check rejects shallow clones
+          fetch-depth: 0 # full history: classify diffs against the merge-base of the base SHA (three-dot)
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -117,7 +121,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: pr
-          fetch-depth: 0 # full history: wf's provenance check rejects shallow clones
+          fetch-depth: 0 # full history: classify diffs against the merge-base of the base SHA (three-dot)
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -152,7 +156,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: pr
-          fetch-depth: 0 # full history: wf's provenance check rejects shallow clones
+          fetch-depth: 0 # full history: classify diffs against the merge-base of the base SHA (three-dot)
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

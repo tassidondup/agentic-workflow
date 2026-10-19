@@ -27,6 +27,7 @@
 - **D1, self-authored PRs.** GitHub does not let an author approve their own PR. A record's PR is accepted when `merged_by` is an approver AND either (a) the PR author is an approver (the human opened and merged it; no review is possible), or (b) an approver's latest review is `APPROVED` on the PR's final head commit. Case (a) is only as strong as the separation between you and the bot token; the setup guide says so.
 - **D2, five jobs, one chain.** `gate-check`, `memory-check` and `stage-check` run in parallel. `verify` needs `stage-check`; `trace-check` needs `verify` and reads the JUnit report from an uploaded artifact. This keeps the ADR 0002 order (stage-check → test → trace-check) while keeping five required check names.
 - **D3, `wf` runs from the base commit.** CI checks out the PR's base SHA into `.wf-trusted/` and runs `wf` from there, so a PR cannot edit the verifier that judges it. The workflow file itself still comes from the PR (GitHub behaviour), so `.github/**` stays a CODEOWNERS path.
+  *Update:* the nested `.wf-trusted/` layout was superseded by sibling `pr/` + `trusted/` (see Task 7 fix round 1); `branches:` was added to `on.pull_request` after the final review.
 - **D4, PR kind comes from the diff, not the branch name.** A PR that adds or changes an approval record is a gate PR. Otherwise branch `change/<id>` marks an implementation PR. Anything else is `other` (CODEOWNERS is its only gate). *Known limit:* an agent can name an implementation branch anything and get `other`; the human merge on protected paths is the backstop. A P0 lane that closes this is out of scope.
 - **D5, staging paths are always protected.** CODEOWNERS can't express "once approved", so `docs/changes/*/design/` and `docs/changes/*/tests/` are always owned by the approver. Only gate PRs touch them, and those need your review anyway.
 - **D6, deleting a record is not a gate PR.** Archiving a change deletes its records; the archive flow isn't designed yet (Plan 4). Record deletions are CODEOWNERS-protected and otherwise unchecked here.
@@ -316,6 +317,8 @@ git commit -m "feat: add run-tests command for CI"
 ---
 
 ### Task 7: CI template, CODEOWNERS and ruleset
+
+> Superseded in part: the nested `.wf-trusted/` layout below became sibling `pr/` + `trusted/` (Task 7 fix round 1), and a `branches:` filter was added to `on.pull_request` after the final review. The shipped `templates/ci/wf.yml` and its tests are the source of truth.
 
 **Files:**
 - Create: `templates/ci/wf.yml`, `templates/CODEOWNERS`, `templates/ruleset.json`, `test/templates.test.ts`

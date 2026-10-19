@@ -44,7 +44,7 @@ Store the token where only the agents' runtime reads it (for example `GH_TOKEN` 
 ## 3. Install
 Until the installer exists (Plan 3), by hand:
 1. Copy `templates/CODEOWNERS` to `.github/CODEOWNERS`. Replace every `@APPROVER` with your login (or each approver's). Add a line for each runner config in `workflow.config.json → test.harness` other than `vitest.config.*`. Code owners need explicit write access to the repo. *Verified 2026-10-19: docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners.* The template doesn't protect `package.json` test scripts or lockfiles; see *Known limits* in the design doc.
-2. Copy `templates/ci/wf.yml` to `.github/workflows/wf.yml`.
+2. Copy `templates/ci/wf.yml` to `.github/workflows/wf.yml`. Replace `main` in its `on.pull_request.branches` filter with the repo's default branch (the installer must do this too). `wf` must only run for PRs into a protected branch, because `trusted/` is that base's commit; without the filter, a PR into an attacker-made branch carrying a `bin.js` that always exits 0 would get green checks with the required names on its head SHA. *Unverified:* whether such a green run could override the failing run on the real PR into main; required checks are tied to the commit SHA, so don't rely on it.
 3. Put a self-contained `wf` bundle at `.workflow/wf/bin.js` (the path in the workflow's `WF` variable). It must resolve nothing from `node_modules`. **There is no way to make one yet.** This repo's `dist/` is NOT a bundle: `npm run build` is plain `tsc`, and `dist/junit.js` imports `fast-xml-parser`. Producing the bundle is the Plan 3 installer's job. See *Until Plan 3* below.
 4. Make sure `workflow.config.json` lists your login in `approvers`.
 5. Open this as one PR (the **install PR**) and merge it. See section 4 before creating the ruleset.
@@ -53,6 +53,8 @@ Until the installer exists (Plan 3), by hand:
    gh api -X POST repos/OWNER/REPO/rulesets --input templates/ruleset.json
    ```
    It targets the default branch: PR required, rebase merges only, linear history, no deletion or force push, no bypass, one approving review, code-owner review, stale approvals dismissed on push, last push must be approved by someone else, threads resolved, and the five checks `gate-check`, `stage-check`, `verify`, `trace-check`, `memory-check` required and up to date. `integration_id: 15368` is the GitHub Actions app (*verified 2026-10-18 from this repo's `protect-main`*).
+
+**No other workflow may define jobs named `gate-check`, `stage-check`, `verify`, `trace-check` or `memory-check`.** Required checks match by name, so a job with one of those names on the same SHA could satisfy the requirement.
 
 **Keep all five checks required.** `verify` needs `stage-check` and `trace-check` needs `verify`. A job skipped because the job it needs failed "will report its status as Success" and "will not prevent a pull request from merging, even if it is a required check" (*verified 2026-10-19: docs.github.com/en/pull-requests/reference/status-checks*). The PR is still blocked only because the failed job is itself required. The same applies to steps the workflow skips on purpose: `stage-check` and `trace-check` only do real work on implementation PRs and pass on gate and `other` PRs.
 
@@ -136,5 +138,7 @@ Workflow:
 - [ ] The five jobs run and report under the exact names the ruleset requires.
 - [ ] A tests-gate PR that also edits `vitest.config.ts` fails `gate-check` and `stage-check` (both report the scope problem). `verify` and `trace-check` are skipped (reported as success).
 - [ ] `verify` uploads `junit-report` and `trace-check` reads it.
+- [ ] A PR into an unprotected branch produces no wf checks, and reopening it does not turn the main PR green.
+- [ ] Base advances after the PR is opened, then the bot pushes again; confirm `classify` and `pr-check` still use the right diff (merge ref vs `pull_request.base.sha`).
 
 Results: (fill in date, repo, outcomes, review states seen)

@@ -57,6 +57,15 @@ describe('ci/wf.yml', () => {
     expect(triggers).toEqual(['pull_request']);
   });
 
+  it('runs only for PRs into named base branches', () => {
+    // Breaks if the `branches` filter is removed or emptied: wf would then run for PRs into any branch, including
+    // an attacker-made branch carrying a bin.js that always exits 0, and its green checks could show on the head SHA.
+    const branches = ((wf.on as Obj).pull_request as { branches?: string[] } | null)?.branches;
+    expect(Array.isArray(branches)).toBe(true);
+    expect(branches?.length ?? 0).toBeGreaterThan(0);
+    for (const b of branches ?? []) expect(b).not.toMatch(/[*]/);
+  });
+
   it('re-runs when a PR is retargeted', () => {
     // Breaks if "edited" (fires on base-branch change) or any other default activity type is dropped.
     const types = ((wf.on as Obj).pull_request as { types?: string[] } | null)?.types;
@@ -161,7 +170,16 @@ describe('ci/wf.yml', () => {
     }
     const depthLines = WORKFLOW_TEXT.split('\n').filter((l) => l.includes('fetch-depth'));
     expect(depthLines).toHaveLength(jobs.length);
-    for (const l of depthLines) expect(l).toMatch(/fetch-depth: 0 +# .*shallow/i);
+    // The comment must give the real reason: provenance (shallow clones) for gate-check, the classify merge-base
+    // for the jobs that run classify; memory-check's checkout is only kept uniform.
+    const reasons: Record<string, RegExp> = {
+      'gate-check': /shallow/i,
+      'memory-check': /memory-check itself reads no git history/,
+      'stage-check': /classify.*merge-base/,
+      verify: /classify.*merge-base/,
+      'trace-check': /classify.*merge-base/,
+    };
+    jobs.forEach(([name], i) => expect(depthLines[i], name).toMatch(reasons[name] ?? /^$/));
   });
 
   it('wf runs from a trusted checkout that is a sibling of the PR checkout, never inside it', () => {
