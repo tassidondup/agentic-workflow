@@ -83,6 +83,39 @@ describe('parseConfig: exempt', () => {
   });
 });
 
+describe('parseConfig: image and canary', () => {
+  const canary = { template: 'tests/harness/canary.test.template.ts', path: 'tests/acceptance/canary.test.ts' };
+  const withTest = (patch: Record<string, unknown>) => ({ ...good, test: { ...good.test, harness: ['tests/harness'], ...patch } });
+
+  it('leaves both keys out when unset, so existing baselines keep their hash', () => {
+    const t = parseConfig(good).test;
+    expect('image' in t).toBe(false);
+    expect('canary' in t).toBe(false);
+  });
+  it('accepts an image and a canary', () => {
+    const t = parseConfig(withTest({ image: 'node:24@sha256:abc', canary })).test;
+    expect(t.image).toBe('node:24@sha256:abc');
+    expect(t.canary).toEqual(canary);
+    expect(Object.isFrozen(t.canary)).toBe(true);
+  });
+  it('accepts a canary template that is a harness file itself', () => {
+    const c = { ...canary, template: 'canary.template.ts' };
+    expect(parseConfig(withTest({ harness: ['canary.template.ts'], canary: c })).test.canary).toEqual(c);
+  });
+  it.each([
+    ['empty image', { image: '' }, /"test\.image"/],
+    ['image with a space', { image: 'node 24' }, /"test\.image"/],
+    ['image that looks like a docker option', { image: '--privileged' }, /"test\.image"/],
+    ['non-string image', { image: 5 }, /"test\.image"/],
+    ['canary that is not an object', { canary: 'yes' }, /"test\.canary" must be an object/],
+    ['canary template outside the harness', { canary: { ...canary, template: 'src/canary.ts' } }, /"test\.canary\.template" must be a test\.harness path/],
+    ['canary path outside acceptanceDir', { canary: { ...canary, path: 'src/canary.test.ts' } }, /"test\.canary\.path" must be inside "test\.acceptanceDir"/],
+    ['unsafe canary path', { canary: { ...canary, path: '../x' } }, /"test\.canary\.path" is not a safe repo path/],
+  ])('rejects %s', (_name, patch, message) => {
+    expect(() => parseConfig(withTest(patch))).toThrow(message);
+  });
+});
+
 describe('loadConfig', () => {
   it('names the file when JSON is truncated (Review Focus 2)', () => {
     repo = makeRepo({ 'workflow.config.json': '{"approvers": [' });
