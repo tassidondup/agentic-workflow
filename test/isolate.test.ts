@@ -5,7 +5,7 @@ import { dockerArgs, runIsolated } from '../src/isolate.js';
 const IDS = { uid: 1001, gid: 118 };
 
 describe('dockerArgs', () => {
-  it('builds a locked-down run with the checkout mounted at /work and no network', () => {
+  it('builds a locked-down run with the checkout mounted at its own host path and no network', () => {
     expect(dockerArgs('node:24', '/home/runner/work/r/r/pr', 'none', ['npx', 'vitest', 'run'], IDS)).toEqual([
       'run', '--rm',
       '--user', '1001:118',
@@ -14,8 +14,8 @@ describe('dockerArgs', () => {
       '--pids-limit', '1024',
       '--network', 'none',
       '-e', 'HOME=/tmp',
-      '--mount', 'type=bind,source=/home/runner/work/r/r/pr,target=/work',
-      '-w', '/work',
+      '--mount', 'type=bind,source=/home/runner/work/r/r/pr,target=/home/runner/work/r/r/pr',
+      '-w', '/home/runner/work/r/r/pr',
       'node:24',
       'npx', 'vitest', 'run',
     ]);

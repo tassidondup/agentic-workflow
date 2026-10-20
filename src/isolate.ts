@@ -12,11 +12,10 @@ export interface IsolatedRun {
   readonly output: string;
 }
 
-const MOUNT_TARGET = '/work';
-
 /**
- * The `docker run` argv for one isolated step (ADR 0002 layer 2). The checkout is mounted read-write at /work and
- * the step runs as the host user, with no capabilities. `argv` goes after the image, so none of its words can be
+ * The `docker run` argv for one isolated step (ADR 0002 layer 2). The checkout is mounted read-write at its own host
+ * path, so absolute file paths in the runner's JUnit report still match the checkout `wf` reads them against. The
+ * step runs as the host user, with no capabilities. `argv` goes after the image, so none of its words can be
  * read as a docker option. `ids` null (no uid on this platform) leaves `--user` out.
  */
 export function dockerArgs(image: string, root: string, network: Network, argv: readonly string[], ids: Ids | null): string[] {
@@ -30,8 +29,8 @@ export function dockerArgs(image: string, root: string, network: Network, argv: 
     '--pids-limit', '1024',
     '--network', network,
     '-e', 'HOME=/tmp',
-    '--mount', `type=bind,source=${root},target=${MOUNT_TARGET}`,
-    '-w', MOUNT_TARGET,
+    '--mount', `type=bind,source=${root},target=${root}`,
+    '-w', root,
     image,
     ...argv,
   ];
