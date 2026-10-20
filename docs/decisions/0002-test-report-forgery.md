@@ -1,6 +1,6 @@
 # 0002. Defend the test report against builder code
 
-**Status:** Accepted (2026-10-07). Design doc updated to v2.5. Layers 1–2 are built in Plan 2b; layer 3 and the review rule ship with the installer (Plan 3).
+**Status:** Accepted (2026-10-07). Design doc updated to v2.5. Layers 1–2 are built (Plan 2b, amended 2026-10-21 below); layer 3 and the review rule ship with the installer (Plan 3).
 **Follows:** ADR 0001 (*Not solved*, first bullet). **Evidence:** the final review of the ADR 0001 branch (PR #3).
 
 ## Context
@@ -75,3 +75,13 @@ Detect T2 everywhere cheaply. Prevent it where the project has a process boundar
 3. **Timing:** layer 1 (canary) is built in Plan 2b together with layer 2 (isolated CI run), since its ordering and nonce live in the CI template. T1 is already covered by ADR 0001, so nothing ships before Plan 2.
 
 Plan 2 is split in two (see `AGENTS.md` *Status*). **Plan 2b** carries this ADR: `wf canary write`, `trace-check --canary`, `test.canary` config and the vitest template, and the containerized CI test step. **Plan 2a** carries ADR 0001's gate-branch fix: CI refuses a tests-gate PR that changes anything outside `docs/changes/<id>/**`.
+
+## Amendment (2026-10-21, Plan 2b)
+Layers 1 and 2 are built. Building them settled points the text above left open or got wrong.
+- **Setup needs the network; the tests must not.** The text puts `test.setup` and `test.command` together under `--network none`, but `npm ci` needs the network. Now: setup runs in one container **with** network, the command in a second container with `--network none`, both on the same bind-mounted checkout. Setup never runs on the host: an install hook there could start a rewriter that outlives the step, which defeats layer 2. Install hooks still run PR code inside the first container; closing that is layer 3 (`--ignore-scripts`).
+- **The image is explicit.** `test.image` in `workflow.config.json`, read from the base commit. `--isolate` without it is an error. There is no default image, so the framework bakes in no stack. Pin it by digest.
+- **One flag instead of `wf canary write`.** The canary fails by design, so a plain test step would fail the CI job. `wf run-tests --canary <nonce>` writes the canary, runs the command, and passes only if the canary failed and nothing else did; it also fails if the command exited 0 although the canary failed in its report. `wf canary write` was dropped; nothing else needs it. `trace-check --canary <nonce>` checks the same condition again on the uploaded report.
+- **The nonce** is made by the `verify` job and passed to `trace-check` as a job output, read only through `env:`.
+- **The checkout is mounted at its own host path**, not `/work`, so absolute file paths in the runner's JUnit report still match the checkout `wf` reads them against.
+- **Container flags:** `--rm --user <host uid:gid> --cap-drop ALL --security-opt no-new-privileges --pids-limit 1024 -e HOME=/tmp`.
+- **Checked with real containers (Docker 29.8.1, `node:24-alpine`, 2026-10-21):** an honest run passes with the canary failing; a forged all-pass report without the canary is rejected; a detached process that tried to rewrite the report 3 seconds after the command exited did not change it; `fetch` from the test command is blocked while the same call from setup succeeds; and a forger that reads the canary file and reports it failing **passes**, which is the *Misses* limit above, now observed. Not checked: Docker on `ubuntu-latest` and the job-output hand-off on real GitHub (guide section 7).
