@@ -1,9 +1,9 @@
 import { classifyPr, type Classification } from './classify.js';
-import { CONFIG_FILE, parseConfig, type WorkflowConfig } from './config.js';
+import { baseConfig } from './base-config.js';
 import type { Exec } from './exec.js';
 import { exemptPolicy } from './exempt.js';
 import { checkGate } from './gate-check.js';
-import { changedFiles, fileAt } from './git.js';
+import { changedFiles } from './git.js';
 import { ghReader, type GitHubReader } from './github.js';
 import { provenanceProblems } from './provenance.js';
 import { GATES, PREREQS, type Gate, type GateResult } from './types.js';
@@ -37,24 +37,13 @@ function statusProblems(results: readonly GateResult[]): string[] {
   });
 }
 
-/**
- * Approvers and the exempt list are deliberately read from the BASE commit, never the PR head: a PR must not be
- * able to add itself (or a bot) to the list that vouches for its records, or exempt its own files.
- */
-function baseConfig(root: string, base: string, exec: Exec): { config: WorkflowConfig } | { problem: string } {
-  const text = fileAt(root, base, CONFIG_FILE, exec);
-  if (text === null) return { problem: `${CONFIG_FILE} is not on ${base}; approvers and exempt paths must come from the base branch` };
-  try {
-    return { config: parseConfig(JSON.parse(text) as unknown) };
-  } catch (e) {
-    return { problem: `${CONFIG_FILE} on ${base} is unusable for approvers and exempt paths: ${(e as Error).message}` };
-  }
-}
+/** Approvers and the exempt list are deliberately read from the BASE commit: a PR must not add itself to the list that vouches for it. */
+const BASE_USE = 'approvers and exempt paths';
 
 /** Classifies the PR from `git diff <base>...HEAD` and its head branch. Both inputs are untrusted. */
 export function classifyDiff(root: string, base: string, headBranch: string, exec: Exec): Classification {
   return classifyPr(changedFiles(root, base, exec), headBranch, () => {
-    const found = baseConfig(root, base, exec);
+    const found = baseConfig(root, base, exec, BASE_USE);
     if ('problem' in found) throw new Error(found.problem);
     return exemptPolicy(found.config);
   });
@@ -75,7 +64,7 @@ export function prCheck(root: string, input: PrCheckInput, exec: Exec, gh?: GitH
   if (plan === null) return classified;
   const problems = statusProblems(plan.check.map((gate) => checkGate(root, plan.id, gate)));
   if (plan.prove.length > 0) {
-    const found = baseConfig(root, input.base, exec);
+    const found = baseConfig(root, input.base, exec, BASE_USE);
     if ('problem' in found) {
       problems.push(found.problem);
     } else {
