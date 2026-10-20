@@ -36,7 +36,9 @@ const USAGE = `Usage: wf <command> [args] [--root <dir>]
                                        print kind=, change=, gate= for a PR (stdout is GITHUB_OUTPUT-safe)
   pr-check --base <ref> --base-branch <name> --branch <name> --repo <owner/name>
                                        classify a PR, check its gates and that its records were merged by an approver
-  run-tests [--report-out <path>]      run test.setup and test.command; --report-out copies the JUnit report to a repo path`;
+  run-tests [--base <ref>] [--report-out <path>]
+                                       run test.setup and test.command; --base reads those settings from that commit;
+                                       --report-out copies the JUnit report to a repo path`;
 
 const asGate = (g: string | undefined): Gate => {
   if (!GATES.includes(g as Gate)) throw new UsageError('gate must be one of spec, design, tests');
@@ -83,7 +85,7 @@ type Flags = PrFlags & RunFlags & Readonly<{ report?: string }>;
 const FLAG_COMMANDS: Readonly<Record<keyof Flags, readonly string[]>> = {
   report: ['trace-check'],
   'report-out': ['run-tests'],
-  base: ['classify', 'pr-check'],
+  base: ['classify', 'pr-check', 'run-tests'],
   'base-branch': ['pr-check'],
   branch: ['classify', 'pr-check'],
   repo: ['pr-check'],

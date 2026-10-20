@@ -254,7 +254,8 @@ describe('ci/wf.yml', () => {
   it('verify always runs the tests and uploads the report only on success', () => {
     // Breaks if the run step becomes conditional, the report path drifts, or the upload gains an if (e.g. always()).
     const tests = stepNamed('verify', (s) => s.run?.includes('run-tests') === true);
-    expect(tests.run).toBe(`$WF run-tests --report-out ${REPORT}`);
+    // Breaks if --base is dropped: the PR's own config would then choose the command that vouches for it.
+    expect(tests.run).toBe(`$WF run-tests --base "$BASE_SHA" --report-out ${REPORT}`);
     expect(tests.if).toBeUndefined();
     const upload = stepNamed('verify', (s) => s.uses?.startsWith('actions/upload-artifact@') === true);
     expect(upload.if).toBeUndefined();

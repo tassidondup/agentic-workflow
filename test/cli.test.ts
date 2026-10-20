@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync,
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { run } from '../src/cli.js';
-import type { Exec, ExecResult } from '../src/exec.js';
+import { realExec, type Exec, type ExecResult } from '../src/exec.js';
 import { approveAll, changeFiles } from './helpers/change.js';
 import { git, makeRepo, type TestRepo } from './helpers/repo.js';
 
@@ -308,6 +308,51 @@ describe('wf cli', () => {
     it('exits 2 on a bad config', () => {
       repo = makeRepo({ 'workflow.config.json': '{}' });
       expect(cliExec({}, ['run-tests']).code).toBe(2);
+    });
+
+    it('--base reads the test settings from that commit, not the working tree', () => {
+      const cfg = (command: string[]): string =>
+        JSON.stringify({ approvers: ['tassi'], test: { command, junitReport: 'reports/junit.xml', acceptanceDir: 'tests/acceptance', harness: [] } });
+      repo = makeRepo({ 'workflow.config.json': cfg(['real-tests']) });
+      git(repo.root, 'init', '-q', '-b', 'main');
+      git(repo.root, 'add', '-A');
+      git(repo.root, 'commit', '-qm', 'base');
+      git(repo.root, 'checkout', '-qb', 'pr');
+      repo.write('workflow.config.json', cfg(['fake-tests']));
+      git(repo.root, 'commit', '-qam', 'pr');
+      const ran: string[] = [];
+      const exec: Exec = (cmd, args, cwd) => {
+        if (cmd === 'git') return realExec(cmd, args, cwd);
+        ran.push(cmd);
+        return { status: 0, stdout: '', stderr: '' };
+      };
+      const out: string[] = [];
+      const code = run(['run-tests', '--base', 'main'], { out: (s) => out.push(s), err: () => {}, cwd: repo.root, exec });
+      expect(code).toBe(0);
+      expect(ran).toEqual(['real-tests']);
+      expect(out.join('\n')).toMatch(/differ from main; using main's/);
+    });
+
+    it('--base with no config on that commit exits 2 and runs nothing', () => {
+      repo = makeRepo({ 'workflow.config.json': CFG });
+      git(repo.root, 'init', '-q', '-b', 'main');
+      git(repo.root, 'commit', '--allow-empty', '-qm', 'empty');
+      const ran: string[] = [];
+      const exec: Exec = (cmd, args, cwd) => {
+        if (cmd === 'git') return realExec(cmd, args, cwd);
+        ran.push(cmd);
+        return { status: 0, stdout: '', stderr: '' };
+      };
+      const err: string[] = [];
+      const code = run(['run-tests', '--base', 'main'], { out: () => {}, err: (s) => err.push(s), cwd: repo.root, exec });
+      expect(code).toBe(2);
+      expect(err.join('\n')).toMatch(/is not on main; the test settings must come from the base branch/);
+      expect(ran).toEqual([]);
+    });
+
+    it('--base on another command that does not take it still exits 2', () => {
+      repo = makeRepo();
+      expect(cli('spec-lint', 'c1', '--base', 'main').err).toMatch(/--base is only for classify and pr-check and run-tests/);
     });
 
     it('--report-out on another command exits 2; run-tests takes no positionals', () => {

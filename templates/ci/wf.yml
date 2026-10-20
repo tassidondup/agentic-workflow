@@ -134,7 +134,9 @@ jobs:
           package-manager-cache: false # setup-node would otherwise enable caching from the PR's package.json
       - id: classify
         run: $WF classify --base "$BASE_SHA" --branch "$HEAD_REF" >> "$GITHUB_OUTPUT"
-      - run: $WF run-tests --report-out .wf-report/junit.xml
+      # --base: the command, setup and report path come from the BASE commit's workflow.config.json, so a PR cannot
+      # swap in a test command that exits 0 without running its tests. A change to them takes effect once merged.
+      - run: $WF run-tests --base "$BASE_SHA" --report-out .wf-report/junit.xml
       # No `if: always()`: a failed test run uploads nothing, so trace-check cannot run on a stale report.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
