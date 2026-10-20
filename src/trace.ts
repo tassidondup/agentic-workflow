@@ -1,6 +1,7 @@
 import { acceptanceCases } from './acceptance.js';
 import { validateBaseline } from './baseline-file.js';
 import { assertChangeExists, readRetires, ROW_ID } from './change.js';
+import { canaryProblems } from './canary.js';
 import { loadConfig } from './config.js';
 import { checkGate } from './gate-check.js';
 import type { TestCase } from './junit.js';
@@ -33,19 +34,28 @@ function approvedAcceptanceDir(root: string, id: string): { dir: string } | { pr
   }
 }
 
+/** The canary result for a report, from the approved settings: a missing `test.canary` is itself a problem. */
+function canaryResult(root: string, cases: readonly TestCase[], nonce: string): readonly string[] {
+  const configured = loadConfig(root).test.canary;
+  if (configured === undefined) return ['test.canary is not set in workflow.config.json, so the report\'s canary cannot be checked'];
+  return canaryProblems(root, configured, cases, nonce);
+}
+
 /**
  * trace-check: the tests gate must be valid (it binds spec, design and retires.json) and the test
  * settings must match the baseline; then every required row must pass in a test under the acceptance folder.
+ * With a `canary` nonce, the report must also show that run's must-fail canary test failing (ADR 0002 layer 1).
  */
-export function traceCheck(root: string, id: string, cases: readonly TestCase[]): readonly string[] {
+export function traceCheck(root: string, id: string, cases: readonly TestCase[], canary?: string): readonly string[] {
   assertChangeExists(root, id);
   const tests = checkGate(root, id, 'tests');
   if (tests.status !== 'valid') return [`tests gate is ${tests.status}; retirements and rows are not approved`];
   const scope = approvedAcceptanceDir(root, id);
   if ('problem' in scope) return [scope.problem];
+  const canaryFound = canary === undefined ? [] : canaryResult(root, cases, canary);
   const malformed = [...liveRows(root), ...changeRows(root, id)]
     .filter((r) => !ROW_ID.test(r.id))
     .map((r) => `Malformed row ID "${r.id}" in ${r.file}:${r.line}`);
   const scoped = acceptanceCases(root, scope.dir, cases);
-  return [...malformed, ...scoped.problems, ...traceImplementation(requiredRows(root, id), scoped.cases, scope.dir).problems];
+  return [...canaryFound, ...malformed, ...scoped.problems, ...traceImplementation(requiredRows(root, id), scoped.cases, scope.dir).problems];
 }

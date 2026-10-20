@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { approve } from './approve.js';
 import { runClassify, runPrCheck, type PrFlags } from './cli-pr.js';
-import { runRunTests, type RunFlags } from './cli-run.js';
+import { needCanary, runRunTests, type RunFlags } from './cli-run.js';
 import type { Exec } from './exec.js';
 import { checkAll, checkGate } from './gate-check.js';
 import { parseJUnit } from './junit.js';
@@ -29,7 +29,9 @@ const USAGE = `Usage: wf <command> [args] [--root <dir>]
   promote <id> <design|tests>          copy staging into live paths
   stage-check <id>                     live files must equal approved staging
   baseline <id>                        run staged tests against HEAD, write baseline.json
-  trace-check <id> --report <path>     every required row must have an executed, passing test under test.acceptanceDir
+  trace-check <id> --report <path> [--canary <nonce>]
+                                       every required row must have an executed, passing test under test.acceptanceDir;
+                                       --canary also requires that run's must-fail canary test to have failed
   spec-lint <id>                       lint the change's example tables
   memory-check                         check context.md, glossary.md and decision audits
   classify --base <ref> --branch <name>
@@ -88,7 +90,7 @@ const FLAG_COMMANDS: Readonly<Record<keyof Flags, readonly string[]>> = {
   report: ['trace-check'],
   'report-out': ['run-tests'],
   isolate: ['run-tests'],
-  canary: ['run-tests'],
+  canary: ['run-tests', 'trace-check'],
   base: ['classify', 'pr-check', 'run-tests'],
   'base-branch': ['pr-check'],
   branch: ['classify', 'pr-check'],
@@ -137,7 +139,7 @@ function dispatch(cmd: string | undefined, pos: readonly string[], root: string,
       if (!report) throw new UsageError('trace-check needs --report <path to JUnit XML>');
       const id = needId(pos[0]);
       const cases = parseJUnit(readRepoFile(root, report, 'utf8'));
-      return showProblems(io, traceCheck(root, id, cases));
+      return showProblems(io, traceCheck(root, id, cases, needCanary(flags)));
     }
     case 'spec-lint':
       return showIssues(io, lintChange(root, needId(pos[0])));
