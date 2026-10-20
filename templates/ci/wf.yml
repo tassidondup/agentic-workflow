@@ -112,6 +112,8 @@ jobs:
     needs: stage-check
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      nonce: ${{ steps.nonce.outputs.nonce }}
     env:
       HEAD_REF: ${{ github.head_ref }}
       BASE_REF: ${{ github.base_ref }}
@@ -134,9 +136,18 @@ jobs:
           package-manager-cache: false # setup-node would otherwise enable caching from the PR's package.json
       - id: classify
         run: $WF classify --base "$BASE_SHA" --branch "$HEAD_REF" >> "$GITHUB_OUTPUT"
+      # A fresh random name for this run's must-fail canary test (ADR 0002 layer 1). trace-check checks the same one.
+      - id: nonce
+        run: echo "nonce=$(openssl rand -hex 16)" >> "$GITHUB_OUTPUT"
       # --base: the command, setup and report path come from the BASE commit's workflow.config.json, so a PR cannot
       # swap in a test command that exits 0 without running its tests. A change to them takes effect once merged.
-      - run: $WF run-tests --base "$BASE_SHA" --report-out .wf-report/junit.xml
+      # --isolate: setup and the command run in containers from test.image (setup with network, the command without),
+      # so nothing PR code starts can outlive the run and rewrite the report. Needs Docker on the runner.
+      # --canary: a test that must fail is added; the run passes only if it alone failed. This detects blanket
+      # forgeries, not a forger that reads the canary (design: Trust boundary); layer 3 is what prevents that.
+      - env:
+          CANARY: ${{ steps.nonce.outputs.nonce }}
+        run: $WF run-tests --base "$BASE_SHA" --isolate --canary "$CANARY" --report-out .wf-report/junit.xml
       # No `if: always()`: a failed test run uploads nothing, so trace-check cannot run on a stale report.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -179,4 +190,5 @@ jobs:
       - if: steps.classify.outputs.kind == 'change'
         env:
           CHANGE: ${{ steps.classify.outputs.change }}
-        run: $WF trace-check "$CHANGE" --report .wf-report/junit.xml
+          CANARY: ${{ needs.verify.outputs.nonce }}
+        run: $WF trace-check "$CHANGE" --report .wf-report/junit.xml --canary "$CANARY"

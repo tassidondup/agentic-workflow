@@ -121,6 +121,10 @@ describe('ci/wf.yml', () => {
       { path: /^jobs\.[^.]+\.steps\[\d+\]\.with\.ref$/, exprs: ['github.event.pull_request.base.sha'] },
       { path: /^jobs\.gate-check\.env\.GH_TOKEN$/, exprs: ['github.token'] },
       { path: /^jobs\.[^.]+\.steps\[\d+\]\.env\.CHANGE$/, exprs: ['steps.classify.outputs.change'] },
+      // The canary nonce: made by verify, handed to trace-check through a job output, and only ever read through env.
+      { path: /^jobs\.verify\.outputs\.nonce$/, exprs: ['steps.nonce.outputs.nonce'] },
+      { path: /^jobs\.verify\.steps\[\d+\]\.env\.CANARY$/, exprs: ['steps.nonce.outputs.nonce'] },
+      { path: /^jobs\.trace-check\.steps\[\d+\]\.env\.CANARY$/, exprs: ['needs.verify.outputs.nonce'] },
     ];
     let seen = 0;
     for (const [path, value] of leaves(wf)) {
@@ -247,15 +251,19 @@ describe('ci/wf.yml', () => {
     expect(stage.run).toBe('$WF stage-check "$CHANGE"');
     const trace = stepNamed('trace-check', (s) => s.run?.includes('trace-check') === true);
     expect(trace.if).toBe(gate);
-    expect(trace.env).toEqual({ CHANGE: '${{ steps.classify.outputs.change }}' });
-    expect(trace.run).toBe(`$WF trace-check "$CHANGE" --report ${REPORT}`);
+    // Breaks if --canary is dropped: trace-check would then accept a report in which the must-fail canary never ran.
+    expect(trace.env).toEqual({ CHANGE: '${{ steps.classify.outputs.change }}', CANARY: '${{ needs.verify.outputs.nonce }}' });
+    expect(trace.run).toBe(`$WF trace-check "$CHANGE" --report ${REPORT} --canary "$CANARY"`);
   });
 
   it('verify always runs the tests and uploads the report only on success', () => {
     // Breaks if the run step becomes conditional, the report path drifts, or the upload gains an if (e.g. always()).
     const tests = stepNamed('verify', (s) => s.run?.includes('run-tests') === true);
     // Breaks if --base is dropped: the PR's own config would then choose the command that vouches for it.
-    expect(tests.run).toBe(`$WF run-tests --base "$BASE_SHA" --report-out ${REPORT}`);
+    // Breaks if --isolate is dropped: PR code would run on the runner, where a process can outlive the step and
+    // rewrite the report. Breaks if --canary is dropped: nothing would show the tests ran with assertions on.
+    expect(tests.run).toBe(`$WF run-tests --base "$BASE_SHA" --isolate --canary "$CANARY" --report-out ${REPORT}`);
+    expect(tests.env).toEqual({ CANARY: '${{ steps.nonce.outputs.nonce }}' });
     expect(tests.if).toBeUndefined();
     const upload = stepNamed('verify', (s) => s.uses?.startsWith('actions/upload-artifact@') === true);
     expect(upload.if).toBeUndefined();
@@ -268,6 +276,17 @@ describe('ci/wf.yml', () => {
     for (const { step } of allSteps) expect(step.if ?? '').not.toMatch(/always|failure|cancelled/);
     const order = wf.jobs.verify?.steps ?? [];
     expect(order.indexOf(upload)).toBeGreaterThan(order.indexOf(tests));
+  });
+
+  it('verify makes a fresh random nonce before the tests and hands it to trace-check', () => {
+    const nonce = stepNamed('verify', (s) => s.id === 'nonce');
+    expect(nonce.run).toBe('echo "nonce=$(openssl rand -hex 16)" >> "$GITHUB_OUTPUT"');
+    expect(nonce.if).toBeUndefined();
+    const order = wf.jobs.verify?.steps ?? [];
+    const tests = stepNamed('verify', (s) => s.run?.includes('run-tests') === true);
+    expect(order.indexOf(nonce)).toBeLessThan(order.indexOf(tests));
+    expect(wf.jobs.verify?.outputs).toEqual({ nonce: '${{ steps.nonce.outputs.nonce }}' });
+    expect(needsOf('trace-check')).toContain('verify');
   });
 
   it('trace-check downloads the junit-report artifact into the PR checkout .wf-report', () => {
