@@ -355,6 +355,20 @@ describe('wf cli', () => {
       expect(cli('spec-lint', 'c1', '--base', 'main').err).toMatch(/--base is only for classify and pr-check and run-tests/);
     });
 
+    it('--isolate and --canary belong to run-tests; a bad nonce or a missing image exits 2 without running anything', () => {
+      repo = makeRepo({ 'workflow.config.json': CFG });
+      expect(cli('spec-lint', 'c1', '--isolate').err).toMatch(/--isolate is only for run-tests/);
+      expect(cli('spec-lint', 'c1', '--canary', 'abcdef0123456789').err).toMatch(/--canary is only for run-tests/);
+      let ran = false;
+      const bad = cliExec({}, ['run-tests', '--canary', 'NOPE'], () => { ran = true; });
+      expect(bad.code).toBe(2);
+      expect(bad.err).toMatch(/--canary must be 16 to 64 lowercase hex/);
+      const noImage = cliExec({}, ['run-tests', '--isolate'], () => { ran = true; });
+      expect(noImage.code).toBe(2);
+      expect(noImage.err).toMatch(/test\.image is not set/);
+      expect(ran).toBe(false);
+    });
+
     it('--report-out on another command exits 2; run-tests takes no positionals', () => {
       repo = makeRepo();
       const r = cli('spec-lint', 'c1', '--report-out', 'x.xml');

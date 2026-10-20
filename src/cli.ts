@@ -36,8 +36,10 @@ const USAGE = `Usage: wf <command> [args] [--root <dir>]
                                        print kind=, change=, gate= for a PR (stdout is GITHUB_OUTPUT-safe)
   pr-check --base <ref> --base-branch <name> --branch <name> --repo <owner/name>
                                        classify a PR, check its gates and that its records were merged by an approver
-  run-tests [--base <ref>] [--report-out <path>]
+  run-tests [--base <ref>] [--isolate] [--canary <nonce>] [--report-out <path>]
                                        run test.setup and test.command; --base reads those settings from that commit;
+                                       --isolate runs each step in a container from test.image (setup with the network,
+                                       the command without); --canary adds the must-fail canary test and requires it to fail;
                                        --report-out copies the JUnit report to a repo path`;
 
 const asGate = (g: string | undefined): Gate => {
@@ -85,6 +87,8 @@ type Flags = PrFlags & RunFlags & Readonly<{ report?: string }>;
 const FLAG_COMMANDS: Readonly<Record<keyof Flags, readonly string[]>> = {
   report: ['trace-check'],
   'report-out': ['run-tests'],
+  isolate: ['run-tests'],
+  canary: ['run-tests'],
   base: ['classify', 'pr-check', 'run-tests'],
   'base-branch': ['pr-check'],
   branch: ['classify', 'pr-check'],
@@ -160,6 +164,8 @@ export function run(argv: readonly string[], io: Io): number {
         root: { type: 'string' },
         report: { type: 'string' },
         'report-out': { type: 'string' },
+        isolate: { type: 'boolean' },
+        canary: { type: 'string' },
         base: { type: 'string' },
         'base-branch': { type: 'string' },
         branch: { type: 'string' },
