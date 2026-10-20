@@ -1,6 +1,6 @@
 # GitHub setup
 
-How to make the `wf` gates enforceable on GitHub: a bot identity for agents, CODEOWNERS, the CI workflow and the `protect-main` ruleset. Design: `docs/specs/2026-09-29-agentic-workflow-design.md` (v2.7), sections *Gates and approval records* and *Trust boundary*.
+How to make the `wf` gates enforceable on GitHub: a bot identity for agents, CODEOWNERS, the CI workflow and the `protect-main` ruleset. Design: `docs/specs/2026-09-29-agentic-workflow-design.md` (v2.9), sections *Gates and approval records* and *Trust boundary*.
 
 Status: **the live verification (section 7) has NOT YET RUN.** Everything below about how `wf` behaves comes from the code and its tests; the workflow has never run on GitHub.
 
@@ -82,6 +82,11 @@ Docs and tooling PRs have no change folder, so they would fail. List what they m
 - **Never list a source folder.** Anything exempt skips every gate. Start with an empty list and add paths when a PR is blocked that should not be.
 - These can never be exempt, whatever you list: `.github`, `.workflow`, `workflow.config.json`, `AGENTS.md`, `CLAUDE.md`, `roles`, `docs/specs`, `docs/decisions`, `docs/changes`, `tests/acceptance`, `tests/harness`, the `test.acceptanceDir` and `test.harness` paths, and anywhere: `package.json`, lockfiles, `vitest.config.*`, `vite.config.*`, `jest.config.*`. Listing one is a config error. Listing a folder that contains one (`docs`) is allowed; the protected part stays protected.
 - Dependency-update PRs (Dependabot, Renovate) touch `package.json` and lockfiles, so they need a `change/<id>` branch with approved gates. That is deliberate.
+
+## 4b. Changing the test command
+CI runs `wf run-tests --base <base sha>`, so `test.setup`, `test.command` and `test.junitReport` come from the **base** commit's `workflow.config.json`, not the PR's. To change the test command, merge a PR that changes it (the approver reviews it as a CODEOWNERS path); it takes effect from the next PR. A PR that changes them also sees a `wf:` line in the `verify` log saying the base's settings were used.
+
+This decides who chooses the command, not what it runs. If `test.command` is `npm test`, a PR can still change `scripts.test` in `package.json`, and the tests themselves run PR code. Treat `package.json` as a protected file in your CODEOWNERS (the template does not list it), and see *Known limits* in the design doc: the canary and isolated run (Plan 2b) are the real answer.
 
 ## 5. What provenance guarantees, and what it doesn't
 `wf pr-check` (the `gate-check` job) decides what kind of PR this is from its diff, then checks it.

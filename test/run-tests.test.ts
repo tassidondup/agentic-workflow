@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Exec, ExecResult } from '../src/exec.js';
+import { realExec, type Exec, type ExecResult } from '../src/exec.js';
 import { runTests } from '../src/run-tests.js';
-import { makeRepo, type TestRepo } from './helpers/repo.js';
+import { git, makeRepo, type TestRepo } from './helpers/repo.js';
 
 let repo: TestRepo;
 afterEach(() => repo?.cleanup());
@@ -28,6 +28,7 @@ interface Fake {
 function fake(replies: Record<string, Partial<ExecResult>> = {}, onCall: (call: string, cwd: string) => void = () => {}): Fake {
   const calls: string[] = [];
   const exec: Exec = (cmd, args, cwd) => {
+    if (cmd === 'git') return realExec(cmd, args, cwd);
     const call = [cmd, ...args].join(' ');
     calls.push(call);
     onCall(call, cwd);
@@ -128,5 +129,66 @@ describe('runTests', () => {
   it('throws on a bad config', () => {
     repo = makeRepo({ 'workflow.config.json': '{}' });
     expect(() => runTests(repo.root, fake().exec)).toThrow(/workflow\.config\.json/);
+  });
+
+  describe('--base (test config from the base commit)', () => {
+    const cfg = (test: Record<string, unknown>): string =>
+      JSON.stringify({ approvers: ['tassi'], test: { command: ['npx', 'vitest'], junitReport: REPORT, acceptanceDir: 'tests/acceptance', harness: [], ...test } });
+
+    /** `main` holds `baseTest`; the checked-out `pr` branch holds `prTest`. */
+    function prRepo(baseTest: Record<string, unknown>, prTest: Record<string, unknown> | null): void {
+      repo = makeRepo({ 'workflow.config.json': cfg(baseTest) });
+      git(repo.root, 'init', '-q', '-b', 'main');
+      git(repo.root, 'add', '-A');
+      git(repo.root, 'commit', '-qm', 'base');
+      if (prTest !== null) {
+        git(repo.root, 'checkout', '-qb', 'pr');
+        repo.write('workflow.config.json', cfg(prTest));
+        git(repo.root, 'commit', '--allow-empty', '-qam', 'pr');
+      }
+    }
+
+    it('runs the base command when the PR changed it to a fake one', () => {
+      prRepo({}, { command: ['true'] });
+      const f = fake();
+      runTests(repo.root, f.exec, undefined, 'main');
+      expect(f.calls).toEqual(['npx vitest']);
+    });
+
+    it('runs the base setup and copies the base report path', () => {
+      prRepo({ setup: ['npm', 'ci'], junitReport: 'out/base.xml' }, { setup: undefined, junitReport: 'out/pr.xml' });
+      const f = fake({}, (call) => {
+        if (call === 'npx vitest') repo.write('out/base.xml', '<base/>');
+      });
+      runTests(repo.root, f.exec, 'copy.xml', 'main');
+      expect(f.calls).toEqual(['npm ci', 'npx vitest']);
+      expect(readFileSync(join(repo.root, 'copy.xml'), 'utf8')).toBe('<base/>');
+    });
+
+    it('says so when the PR changes the test settings, and stays quiet when it does not', () => {
+      prRepo({}, { command: ['true'] });
+      expect(runTests(repo.root, fake().exec, undefined, 'main').output).toMatch(/^wf: the test settings in workflow\.config\.json differ from main; using main's/);
+      prRepo({}, {});
+      expect(runTests(repo.root, fake().exec, undefined, 'main').output).toBe('');
+    });
+
+    it('throws, running nothing, when the base has no config', () => {
+      repo = makeRepo({ 'workflow.config.json': cfg({}) });
+      git(repo.root, 'init', '-q', '-b', 'main');
+      git(repo.root, 'commit', '--allow-empty', '-qm', 'empty');
+      const f = fake();
+      expect(() => runTests(repo.root, f.exec, undefined, 'main')).toThrow(/is not on main; the test settings must come from the base branch/);
+      expect(f.calls).toEqual([]);
+    });
+
+    it('throws, running nothing, when the base config is unusable', () => {
+      repo = makeRepo({ 'workflow.config.json': '{}' });
+      git(repo.root, 'init', '-q', '-b', 'main');
+      git(repo.root, 'add', '-A');
+      git(repo.root, 'commit', '-qm', 'bad');
+      const f = fake();
+      expect(() => runTests(repo.root, f.exec, undefined, 'main')).toThrow(/on main is unusable for the test settings/);
+      expect(f.calls).toEqual([]);
+    });
   });
 });
