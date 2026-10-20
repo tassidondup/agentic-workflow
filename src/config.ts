@@ -9,6 +9,15 @@ export interface TestConfig {
   readonly junitReport: string;
   readonly acceptanceDir: string;
   readonly harness: readonly string[];
+  /** Container image for isolated runs (`wf run-tests --isolate`). Absent when not configured. */
+  readonly image?: string;
+  /** The must-fail canary test (ADR 0002 layer 1): a locked template and where it is written. Absent when not configured. */
+  readonly canary?: CanaryConfig;
+}
+
+export interface CanaryConfig {
+  readonly template: string;
+  readonly path: string;
 }
 
 export interface WorkflowConfig {
@@ -32,9 +41,28 @@ const safePath = (value: unknown, label: string): string => {
 
 const STAGING = 'docs/changes';
 
+/** An image reference is passed to `docker run`, so it may not hold whitespace or start like an option. */
+function parseImage(image: unknown): string {
+  if (typeof image !== 'string' || image === '' || /\s/.test(image) || image.startsWith('-')) {
+    return fail('"test.image" must be an image reference without spaces, such as node:24');
+  }
+  return image;
+}
+
+function parseCanary(canary: unknown, dir: string, harness: readonly string[]): CanaryConfig {
+  if (!isObject(canary)) return fail('"test.canary" must be an object with "template" and "path"');
+  const template = safePath(canary.template, 'test.canary.template');
+  const path = safePath(canary.path, 'test.canary.path');
+  if (!harness.some((h) => isUnderPath(h, template))) {
+    return fail('"test.canary.template" must be a test.harness path (or inside one), so the baseline locks it');
+  }
+  if (!isUnderPath(dir, path)) return fail('"test.canary.path" must be inside "test.acceptanceDir"');
+  return Object.freeze({ template, path });
+}
+
 function parseTest(test: unknown): TestConfig {
   if (!isObject(test)) return fail('"test" must be an object');
-  const { setup, command, junitReport, acceptanceDir, harness } = test;
+  const { setup, command, junitReport, acceptanceDir, harness, image, canary } = test;
   if (!isStringArray(command) || command.length === 0) {
     return fail('"test.command" must be a non-empty array of strings (not a shell string)');
   }
@@ -48,12 +76,16 @@ function parseTest(test: unknown): TestConfig {
   }
   if (isUnderPath(dir, report)) return fail('"test.junitReport" may not be inside "test.acceptanceDir"');
   if (!Array.isArray(harness)) return fail('"test.harness" must be a list of repo paths (it may be empty)');
+  const safeHarness = harness.map((h: unknown, i) => safePath(h, `test.harness[${i}]`));
   return Object.freeze({
     setup: setup === undefined ? null : Object.freeze([...setup]),
     command: Object.freeze([...command]),
     junitReport: report,
     acceptanceDir: dir,
-    harness: Object.freeze(harness.map((h: unknown, i) => safePath(h, `test.harness[${i}]`))),
+    harness: Object.freeze(safeHarness),
+    // Left out when unset, so a baseline made before these existed keeps its inputs_sha256.
+    ...(image === undefined ? {} : { image: parseImage(image) }),
+    ...(canary === undefined ? {} : { canary: parseCanary(canary, dir, safeHarness) }),
   });
 }
 
