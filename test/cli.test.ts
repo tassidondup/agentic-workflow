@@ -255,6 +255,50 @@ describe('wf cli', () => {
     });
   });
 
+  describe('trace-check --canary', () => {
+    const NONCE = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
+    const CFG = JSON.stringify({
+      approvers: ['tassi'],
+      test: {
+        command: ['node', '-e', '0'], junitReport: 'reports/junit.xml', acceptanceDir: 'tests/acceptance',
+        harness: ['tests/harness/canary.template.ts'], canary: { template: 'tests/harness/canary.template.ts', path: 'tests/acceptance/canary.test.ts' },
+      },
+    });
+    const report = (canary: 'failure' | 'ok' | 'absent'): string => {
+      const row = '<testcase name="[LST-001] x" classname="tests/acceptance/a.test.ts" file="tests/acceptance/a.test.ts"/>';
+      const c = canary === 'absent' ? '' : `<testcase name="[canary:${NONCE}]" classname="tests/acceptance/canary.test.ts" file="tests/acceptance/canary.test.ts">${canary === 'failure' ? '<failure message="x"/>' : ''}</testcase>`;
+      return `<testsuites><testsuite name="s">${row}${c}</testsuite></testsuites>`;
+    };
+    function approved(): void {
+      repo = makeRepo(changeFiles('c1', { 'workflow.config.json': CFG, 'tests/harness/canary.template.ts': 'canary' }));
+      approveAll(repo);
+    }
+
+    it('passes with a failed canary, and fails with a passing or missing one', () => {
+      approved();
+      repo.write('r.xml', report('failure'));
+      expect(cli('trace-check', 'c1', '--report', 'r.xml', '--canary', NONCE)).toMatchObject({ code: 0, out: '' });
+      repo.write('r.xml', report('ok'));
+      const passed = cli('trace-check', 'c1', '--report', 'r.xml', '--canary', NONCE);
+      expect(passed.code).toBe(1);
+      expect(passed.out).toMatch(/cannot be trusted/);
+      repo.write('r.xml', report('absent'));
+      expect(cli('trace-check', 'c1', '--report', 'r.xml', '--canary', NONCE).code).toBe(1);
+    });
+    it('does not look for a canary without the flag', () => {
+      approved();
+      repo.write('r.xml', report('absent'));
+      expect(cli('trace-check', 'c1', '--report', 'r.xml').code).toBe(0);
+    });
+    it('a malformed nonce is a usage error', () => {
+      approved();
+      repo.write('r.xml', report('failure'));
+      const r = cli('trace-check', 'c1', '--report', 'r.xml', '--canary', 'NOPE');
+      expect(r.code).toBe(2);
+      expect(r.err).toMatch(/--canary must be 16 to 64 lowercase hex/);
+    });
+  });
+
   describe('run-tests', () => {
     const CFG = JSON.stringify({
       approvers: ['tassi'],

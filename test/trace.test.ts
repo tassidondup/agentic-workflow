@@ -112,3 +112,64 @@ describe('traceCheck (I3)', () => {
     }
   });
 });
+
+describe('traceCheck with a canary (ADR 0002 layer 1)', () => {
+  let repo: TestRepo;
+  afterEach(() => repo?.cleanup());
+  const NONCE = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
+  const TEMPLATE = 'tests/harness/canary.template.ts';
+  const CANARY_PATH = 'tests/acceptance/canary.test.ts';
+  const config = (withCanary: boolean): string =>
+    JSON.stringify({
+      approvers: ['tassi'],
+      test: {
+        command: ['node', '-e', '0'],
+        junitReport: 'reports/junit.xml',
+        acceptanceDir: 'tests/acceptance',
+        harness: [TEMPLATE],
+        ...(withCanary ? { canary: { template: TEMPLATE, path: CANARY_PATH } } : {}),
+      },
+    });
+  const approved = (withCanary = true): void => {
+    repo = makeRepo(changeFiles('c1', { 'workflow.config.json': config(withCanary), [TEMPLATE]: 'canary' }));
+    approveAll(repo);
+  };
+  const canary = (status: TestCase['status'], patch: Partial<TestCase> = {}): TestCase => ({
+    name: `[canary:${NONCE}]`, classname: CANARY_PATH, file: CANARY_PATH, status, rowIds: [], ...patch,
+  });
+  const row = [tc(['LST-001'], 'passed')];
+
+  it('passes when the canary failed and every required row passed', () => {
+    approved();
+    expect(traceCheck(repo.root, 'c1', [...row, canary('failed')], NONCE)).toEqual([]);
+  });
+  it.each([
+    ['passed', [canary('passed')]],
+    ['skipped', [canary('skipped')]],
+    ['missing', []],
+    ['from another file', [canary('failed', { file: 'tests/acceptance/a.test.ts' })]],
+    ['duplicated', [canary('failed'), canary('failed')]],
+  ])('rejects a report whose canary is %s, even though every row passed', (_label, cases) => {
+    approved();
+    const found = traceCheck(repo.root, 'c1', [...row, ...cases], NONCE);
+    expect(found).toHaveLength(1);
+    expect(found[0]).toMatch(/cannot be trusted/);
+  });
+  it('still reports a failing row next to the canary result', () => {
+    approved();
+    expect(traceCheck(repo.root, 'c1', [tc(['LST-001'], 'failed'), canary('failed')], NONCE)).toEqual(['LST-001: failing']);
+  });
+  it('a canary cannot stand in for a required row', () => {
+    approved();
+    expect(traceCheck(repo.root, 'c1', [canary('failed')], NONCE)).toEqual(['LST-001: no executed test under tests/acceptance']);
+  });
+  it('fails when the approved config has no test.canary', () => {
+    approved(false);
+    expect(traceCheck(repo.root, 'c1', [...row, canary('failed')], NONCE)).toEqual([expect.stringMatching(/test\.canary is not set/)]);
+  });
+  it('is not checked when no nonce is given', () => {
+    approved();
+    expect(traceCheck(repo.root, 'c1', row)).toEqual([]);
+  });
+});
+

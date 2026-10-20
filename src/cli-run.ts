@@ -20,7 +20,7 @@ function needReportOut(flags: RunFlags): string | undefined {
 }
 
 /** `--canary` is this run's nonce; anything but 16 to 64 lowercase hex characters is a usage error (exit 2). */
-function needCanary(flags: RunFlags): string | undefined {
+export function needCanary(flags: RunFlags): string | undefined {
   const value = flags.canary;
   if (value === undefined) return undefined;
   if (!isNonce(value)) throw new UsageError('--canary must be 16 to 64 lowercase hex characters');
