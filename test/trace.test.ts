@@ -95,4 +95,20 @@ describe('traceCheck (I3)', () => {
     repo.write('workflow.config.json', CONFIG.replace('"tests/acceptance"', '"src"'));
     expect(traceCheck(repo.root, 'c1', pass)).toEqual([expect.stringMatching(/baseline\.json is stale or invalid: .*inputs_sha256 mismatch/)]);
   });
+  it('fails when a PR adds a harness path or a different command or report path after the tests gate', () => {
+    // The whole parsed `test` block is bound by baseline.json, so none of these can be changed by the PR's own config.
+    for (const change of [
+      (c: string) => c.replace('"harness":[]', '"harness":["vitest.config.ts"]'),
+      (c: string) => c.replace('"node","-e","0"', '"node","-e","process.exit(0)"'),
+      (c: string) => c.replace('reports/junit.xml', 'reports/other.xml'),
+    ]) {
+      repo = makeRepo(changeFiles());
+      approveAll(repo);
+      const edited = change(CONFIG);
+      expect(edited).not.toBe(CONFIG);
+      repo.write('workflow.config.json', edited);
+      expect(traceCheck(repo.root, 'c1', pass)).toEqual([expect.stringMatching(/inputs_sha256 mismatch/)]);
+      repo.cleanup();
+    }
+  });
 });
