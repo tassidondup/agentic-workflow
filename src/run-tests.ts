@@ -3,7 +3,7 @@ import { canaryName, canaryProblems, isNonce, removeCanary, writeCanary } from '
 import { loadConfig, type WorkflowConfig } from './config.js';
 import type { Exec } from './exec.js';
 import { runIsolated } from './isolate.js';
-import { parseJUnit } from './junit.js';
+import { hiddenFailures, parseJUnit } from './junit.js';
 import { assertSafeRepoPath } from './paths.js';
 import { lstatInRepo, readRepoFile, removeRepoFile, writeRepoFile } from './safe-fs.js';
 
@@ -62,9 +62,13 @@ function canaryRun(root: string, test: WorkflowConfig['test'], nonce: string, ma
     if (main.status !== 0) return { status: main.status, output };
     throw new Error(`The test command did not write ${test.junitReport}. Configure your runner's JUnit reporter.`);
   }
-  const cases = parseJUnit(readRepoFile(root, test.junitReport, 'utf8'));
+  const xml = readRepoFile(root, test.junitReport, 'utf8');
+  const cases = parseJUnit(xml);
   const problems = canaryProblems(root, canary, cases, nonce);
   if (problems.length > 0) return failing(output, problems);
+  // The exit status is non-zero by design here, so it cannot fail a run whose report hides a failure.
+  const hidden = hiddenFailures(xml);
+  if (hidden.length > 0) return failing(output, hidden);
   const name = canaryName(nonce);
   if (cases.some((c) => !c.name.includes(name) && c.status === 'failed')) return { status: main.status === 0 ? 1 : main.status, output };
   if (main.status === 0) return failing(output, [`the test command exited 0 although the canary failed in its report, so the exit status and the report disagree`]);

@@ -301,6 +301,19 @@ describe('runTests: isolated, with a canary', () => {
     expect(existsSync(join(repo.root, CANARY_PATH))).toBe(false);
   });
 
+  it.each([
+    ['a suite that declares an error no test lists', '<testsuites><testsuite name="a.test.ts" failures="0" errors="1"><testcase name="[LST-001] works" classname="tests/acceptance/a.test.ts"/></testsuite></testsuites>'],
+    ['an error outside any test', '<testsuites><testsuite name="a.test.ts"><testcase name="[LST-001] works" classname="tests/acceptance/a.test.ts"/><error message="Cannot find module"/></testsuite></testsuites>'],
+  ])('fails when the report has %s, though only the canary case failed', (_label, extra) => {
+    isolatedRepo();
+    const canary = `<testsuite name="canary" failures="1"><testcase name="[canary:${NONCE}]" classname="${CANARY_PATH}" file="${CANARY_PATH}"><failure message="x"/></testcase></testsuite>`;
+    const report = extra.replace('<testsuites>', `<testsuites>${canary}`);
+    const r = runTests(repo.root, dockerFake((s) => { if (isCommand(s)) repo.write(REPORT, report); return isCommand(s) ? 1 : 0; }).exec, opts);
+    expect(r.status).toBe(1);
+    expect(r.output).toMatch(/a\.test\.ts/);
+    expect(existsSync(join(repo.root, 'out/junit.xml'))).toBe(false);
+  });
+
   it('fails when the runner exits 0 although the report shows the canary failing', () => {
     isolatedRepo();
     const r = runTests(repo.root, dockerFake(writeReport([canaryCase('failed'), other('passed')], 0)).exec, opts);
