@@ -45,3 +45,32 @@ export function parseJUnit(xml: string): TestCase[] {
   }
   return collect(doc);
 }
+
+const countOf = (value: unknown): number => {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : 0;
+};
+
+function hiddenIn(node: unknown, label: string): string[] {
+  if (!isObject(node)) return [];
+  const children = ['testsuites', 'testsuite'].flatMap((k) => (Array.isArray(node[k]) ? (node[k] as unknown[]) : []));
+  const problems: string[] = [];
+  if ('failure' in node || 'error' in node) problems.push(`${label} reports an error outside any test case`);
+  const declared = countOf(node['@_failures']) + countOf(node['@_errors']);
+  const listed = collect(node).filter((c) => c.status === 'failed').length;
+  if (declared > listed) problems.push(`${label} declares ${declared} failure or error, but its report lists ${listed} failed tests`);
+  return [...problems, ...children.flatMap((c, i) => hiddenIn(c, isObject(c) && c['@_name'] !== undefined ? `suite "${String(c['@_name'])}"` : `suite #${i + 1}`))];
+}
+
+/**
+ * Failures a report states but does not attach to a test case: a suite-level error (a file that failed to load), or
+ * a count of failures or errors larger than the failed cases listed under it. A suite that counts its children's
+ * failures too is fine, since its listed cases include theirs. Needed where the exit status cannot be trusted to fail
+ * the run (the canary run always exits non-zero).
+ */
+export function hiddenFailures(xml: string): string[] {
+  const doc: unknown = parser.parse(xml);
+  if (!isObject(doc)) return [];
+  const roots = ['testsuites', 'testsuite'].flatMap((k) => (Array.isArray(doc[k]) ? (doc[k] as unknown[]) : []));
+  return roots.flatMap((r) => hiddenIn(r, isObject(r) && r['@_name'] !== undefined ? `suite "${String(r['@_name'])}"` : 'the report'));
+}
