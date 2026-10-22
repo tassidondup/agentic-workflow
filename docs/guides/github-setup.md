@@ -98,6 +98,7 @@ This decides who chooses the command, not what it runs. If `test.command` is `np
 - `canary.template`: copy `templates/canary/vitest.canary.test.template.ts` to that path (or write the same for your runner). It must be a `test.harness` path, so the baseline locks it. `canary.path` must be inside `acceptanceDir`. CI writes the file into the checkout for the run and deletes it again.
 - A project without `image` or `canary` fails `verify` on every PR. That is deliberate.
 - The runner needs Docker (unverified on `ubuntu-latest`; confirm in section 7). Your tests run as the runner's user with no capabilities and the checkout mounted read-write at its own path.
+- The uploaded `junit-report` artifact always holds one failing test, `[canary:<nonce>]`, whose file no longer exists. That is by design: `trace-check` re-checks that case, and a new nonce each run means an old report cannot pass.
 - The JUnit reporter must record each test's file (vitest does). Absolute paths in the report are fine because the checkout is mounted at its host path.
 
 What it stops: a report that never ran the canary, one where the canary passed, tests that start a process to rewrite the report after the run, and network calls from tests. What it does not stop: PR code that reads the canary file and reports it failing, and install hooks or assertion patching inside the containers. Those need black-box acceptance tests in their own container (Plan 3). Until then a green `verify` is evidence, not proof.
